@@ -1,0 +1,26 @@
+TYPE-POOL abap.
+TYPES abap_encoding          TYPE c LENGTH 20.
+TYPES abap_abstypename       TYPE c LENGTH 200.
+TYPES abap_attrname          TYPE c LENGTH 61.
+TYPES abap_classname         TYPE c LENGTH 30.
+TYPES abap_compname          TYPE c LENGTH 30.
+TYPES abap_editmask          TYPE c LENGTH 7.
+TYPES abap_evntname          TYPE c LENGTH 61.
+TYPES abap_excpname          TYPE c LENGTH 30.
+TYPES abap_helpid            TYPE c LENGTH 62.
+TYPES abap_intfname          TYPE c LENGTH 30.
+TYPES abap_keydefkind        TYPE c LENGTH 1.
+TYPES abap_keyname           TYPE c LENGTH 255.
+TYPES abap_methname          TYPE c LENGTH 61.
+TYPES abap_parmkind          TYPE c LENGTH 1.
+TYPES abap_parmname          TYPE c LENGTH 30.
+TYPES abap_structkind        TYPE c LENGTH 1.
+TYPES abap_typekind          TYPE c LENGTH 1.
+TYPES abap_visibility        TYPE c LENGTH 1.
+TYPES abap_tablekind         TYPE c LENGTH 1.
+TYPES abap_char1             TYPE c LENGTH 1.
+TYPES abap_cr_lf             TYPE c LENGTH 2.
+TYPES abap_byte_order_mark   TYPE x LENGTH 2.
+TYPES abap_byte_order_utf8   TYPE x LENGTH 3.
+TYPES abap_endian            TYPE c LENGTH 1.
+TYPES abap_typename          TYPE c LENGTH 61.

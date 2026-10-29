@@ -1,0 +1,27 @@
+{
+  "name": "abap-practica",
+  "version": "1.0.0",
+  "description": "Sistema de práctica ABAP en el navegador: SE38, SE11, SE16, SE84 y ALV",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:engine": "node scripts/test-engine.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@abaplint/core": "^2.120.91",
+    "@abaplint/database-sqlite": "^2.14.12",
+    "@abaplint/runtime": "^2.14.15",
+    "@abaplint/transpiler": "^2.14.15",
+    "monaco-editor": "^0.52.2",
+    "sql.js": "^1.15.2"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5",
+    "vite-plugin-node-polyfills": "^0.28.0"
+  }
+}
