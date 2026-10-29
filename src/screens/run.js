@@ -4,6 +4,8 @@ import { store } from "../store.js";
 import { alvScreen } from "./alv.js";
 import { debuggerScreen } from "./debugger.js";
 import { formatDate, formatTime } from "../engine/output.js";
+import { tableDef, activeDtel, dtelTechnical, f4Values } from "../ddic-repo.js";
+import { pickFrom } from "./se11.js";
 
 const selMemory = {};
 
@@ -293,7 +295,7 @@ function selectionScreen(app, name, title, ctx) {
             },
           });
           if (s.info?.kind === "D") inp.after;
-          cur().append(h("div", { class: "sel-row" }, h("label", { class: "sel-label" + (s.obligatory ? " required" : "") }, label(s.name)), inp));
+          cur().append(h("div", { class: "sel-row" }, h("label", { class: "sel-label" + (s.obligatory ? " required" : "") }, label(s.name)), inp, f4Button(s.type || s.like, inp, (v) => (values[s.name] = v))));
         }
       } else if (s.kind === "selopt") {
         const rows = (values[s.name] = Array.isArray(values[s.name]) ? values[s.name] : []);
@@ -322,7 +324,10 @@ function selectionScreen(app, name, title, ctx) {
             "div",
             { class: "sel-row" },
             h("label", { class: "sel-label" + (s.obligatory ? " required" : "") }, label(s.name)),
-            mk("low"),
+            (() => {
+              const lo = mk("low");
+              return [lo, f4Button(s.for, lo, (v) => { first.low = v; first.option = ""; })];
+            })(),
             s.noIntervals ? null : h("span", { class: "sel-a" }, "a"),
             s.noIntervals ? null : mk("high"),
             s.noExtension ? null : multi,
@@ -332,6 +337,39 @@ function selectionScreen(app, name, title, ctx) {
     }
     formEl.replaceChildren(root);
     setTimeout(() => formEl.querySelector("input.sap-input")?.focus(), 10);
+  }
+
+  // ---- F4 en la pantalla de selección (valores fijos del dominio o tabla de verificación) ----
+  function fieldForType(typeStr) {
+    const t = String(typeStr || "").toUpperCase();
+    if (!t) return null;
+    if (t.includes("-")) {
+      const [tab, fld] = t.split("-");
+      const def = tableDef(tab);
+      return def?.fields.find((f) => f.name === fld) || null;
+    }
+    const e = activeDtel(t);
+    if (!e) return null;
+    return { name: t, ...dtelTechnical(e) };
+  }
+  function f4Button(typeStr, inp, setValue) {
+    const f = fieldForType(typeStr);
+    if (!f || !(f.fixedValues?.length || f.checkTable || f.valueTable)) return null;
+    const open = async () => {
+      const r = f4Values(app.engine, f);
+      if (!r || !r.rows.length) return app.status("No hay valores posibles", "W");
+      const chosen = await pickFrom("Valores posibles" + (r.table ? ` (${r.table})` : ""), r.rows.map((x) => [x.value, x.text]));
+      if (chosen === null || chosen === undefined) return;
+      inp.value = chosen;
+      setValue(chosen);
+    };
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "F4") {
+        e.preventDefault();
+        open();
+      }
+    });
+    return h("button", { class: "btn f4", title: "Valores posibles (F4)", onclick: (e) => { e.preventDefault(); open(); } }, "F4");
   }
 
   // ---- variantes: valores guardados de la pantalla de selección ----

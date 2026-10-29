@@ -74,8 +74,8 @@ export class Engine {
     await this.db.execute(`CREATE TABLE IF NOT EXISTS "zz_meta" ("tab" TEXT PRIMARY KEY, "ddl" TEXT)`);
   }
 
-  async ddlFor(tables) {
-    const files = tables.map((t) => new abaplint.MemoryFile(t.name.toLowerCase() + ".tabl.xml", tableToXml(t)));
+  async ddlFor(tables, extraFiles = []) {
+    const files = [...tables.map((t) => new abaplint.MemoryFile(t.name.toLowerCase() + ".tabl.xml", tableToXml(t))), ...extraFiles.map((f) => new abaplint.MemoryFile(f.filename, f.contents))];
     const reg = new abaplint.Registry(lintConfig()).addFiles(files);
     reg.parse();
     const res = await new Transpiler({ unknownTypes: "runtimeError" }).run(reg);
@@ -107,9 +107,9 @@ export class Engine {
   }
 
   // sincroniza el esquema SQLite con las tablas activas de SE11
-  async syncSchema(userTables) {
+  async syncSchema(userTables, extraFiles = []) {
     const all = [...Object.values(STANDARD_TABLES), ...userTables];
-    const ddl = await this.ddlFor(all);
+    const ddl = await this.ddlFor(all, extraFiles);
     const meta = Object.fromEntries(this.query(`SELECT "tab", "ddl" FROM "zz_meta"`).map((r) => [r.tab, r.ddl]));
     const seed = standardRows();
     let changed = false;

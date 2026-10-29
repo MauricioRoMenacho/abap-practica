@@ -55,6 +55,9 @@ function intLen(f) {
 export function tableToXml(def) {
   const fields = def.fields
     .map((f, i) => {
+      if (f.dtel) {
+        return `    <DD03P><FIELDNAME>${esc(f.name.toUpperCase())}</FIELDNAME><POSITION>${pad(i + 1, 4)}</POSITION>${f.key ? "<KEYFLAG>X</KEYFLAG>" : ""}<ROLLNAME>${esc(f.dtel.toUpperCase())}</ROLLNAME><ADMINFIELD>0</ADMINFIELD>${f.key ? "<NOTNULL>X</NOTNULL>" : ""}<COMPTYPE>E</COMPTYPE></DD03P>`;
+      }
       const t = DDIC_TYPES[f.type];
       const dec = t.decimals ? `<DECIMALS>${pad(Number(f.decimals) || 0)}</DECIMALS>` : "";
       return `    <DD03P><FIELDNAME>${esc(f.name.toUpperCase())}</FIELDNAME><POSITION>${pad(i + 1, 4)}</POSITION>${f.key ? "<KEYFLAG>X</KEYFLAG>" : ""}<INTTYPE>${t.int}</INTTYPE><INTLEN>${pad(intLen(f))}</INTLEN>${f.key ? "<NOTNULL>X</NOTNULL>" : ""}<DATATYPE>${t.ddic || f.type}</DATATYPE><LENG>${pad(fieldLength(f))}</LENG>${dec}<DDTEXT>${esc(f.description)}</DDTEXT></DD03P>`;
@@ -75,7 +78,7 @@ ${fields}
 }
 
 // Validación de una definición de tabla antes de activarla
-export function validateTable(def) {
+export function validateTable(def, opts = {}) {
   const errors = [];
   if (!/^[YZ][A-Z0-9_]{1,15}$/i.test(def.name)) {
     errors.push("El nombre debe empezar por Z o Y y tener máximo 16 caracteres (letras, números, _).");
@@ -91,7 +94,9 @@ export function validateTable(def) {
     if (seen.has(n)) errors.push(`${pos}: el campo ${n} está repetido.`);
     seen.add(n);
     const t = DDIC_TYPES[f.type];
-    if (!t) errors.push(`${pos} (${n}): tipo de datos "${f.type}" no válido.`);
+    if (f.dtel) {
+      if (opts.dtelExists && !opts.dtelExists(f.dtel)) errors.push(`${pos} (${n}): el elemento de datos ${f.dtel} no existe o no está activo.`);
+    } else if (!t) errors.push(`${pos} (${n}): tipo de datos "${f.type}" no válido.`);
     else if (t.needsLen) {
       const l = Number(f.length);
       if (!l || l < 1 || l > t.maxLen) errors.push(`${pos} (${n}): longitud entre 1 y ${t.maxLen}.`);
@@ -100,10 +105,85 @@ export function validateTable(def) {
     if (f.key && keyEnded) errors.push(`${pos} (${n}): los campos clave deben ir al inicio de la tabla.`);
     if (!f.key) keyEnded = true;
     if (f.key && f.type === "STRING") errors.push(`${pos} (${n}): un STRING no puede ser campo clave.`);
+    if (f.checkTable && opts.tableExists && !opts.tableExists(f.checkTable)) errors.push(`${pos} (${n}): la tabla de verificación ${f.checkTable} no existe o no está activa.`);
   });
   if (!def.fields.some((f) => f.key)) errors.push("La tabla necesita al menos un campo clave.");
   const clnt = def.fields.findIndex((f) => f.type === "CLNT");
   if (clnt > 0) errors.push("El campo de mandante (CLNT) debe ser el primer campo.");
   if (clnt === 0 && !def.fields[0].key) errors.push("El campo de mandante debe ser clave.");
+  return errors;
+}
+
+
+// ---------------------------------------------------------------- dominios y elementos de datos
+const head = (serializer) => `<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="${serializer}" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>`;
+const tail = `
+  </asx:values>
+ </asx:abap>
+</abapGit>`;
+
+export function domainToXml(d) {
+  const t = DDIC_TYPES[d.type] || DDIC_TYPES.CHAR;
+  const len = t.fixedLen !== undefined ? t.fixedLen : Number(d.length) || 1;
+  const dec = t.decimals ? Number(d.decimals) || 0 : 0;
+  const vals = (d.values || []).filter((v) => v.low !== "");
+  return `${head("LCL_OBJECT_DOMA")}
+   <DD01V><DOMNAME>${esc(d.name)}</DOMNAME><DDLANGUAGE>S</DDLANGUAGE><DATATYPE>${t.ddic || d.type}</DATATYPE><LENG>${pad(len)}</LENG><OUTPUTLEN>${pad(len + (dec ? 1 : 0))}</OUTPUTLEN>${dec ? `<DECIMALS>${pad(dec)}</DECIMALS>` : ""}${d.lowercase ? "<LOWERCASE>X</LOWERCASE>" : ""}${vals.length ? "<VALEXI>X</VALEXI>" : ""}<DDTEXT>${esc(d.description)}</DDTEXT>${d.valueTable ? `<ENTITYTAB>${esc(d.valueTable)}</ENTITYTAB>` : ""}</DD01V>${
+     vals.length ? `<DD07V_TAB>${vals.map((v, i) => `<DD07V><VALPOS>${pad(i + 1, 4)}</VALPOS><DDLANGUAGE>S</DDLANGUAGE><DOMVALUE_L>${esc(v.low)}</DOMVALUE_L><DDTEXT>${esc(v.text)}</DDTEXT></DD07V>`).join("")}</DD07V_TAB>` : ""
+   }${tail}`;
+}
+
+export function dtelToXml(e) {
+  const l = e.labels || {};
+  let typing;
+  if (e.domain) typing = `<DOMNAME>${esc(e.domain)}</DOMNAME>`;
+  else {
+    const t = DDIC_TYPES[e.type] || DDIC_TYPES.CHAR;
+    const len = t.fixedLen !== undefined ? t.fixedLen : Number(e.length) || 1;
+    typing = `<DATATYPE>${t.ddic || e.type}</DATATYPE><LENG>${pad(len)}</LENG><DECIMALS>${pad(t.decimals ? Number(e.decimals) || 0 : 0)}</DECIMALS>`;
+  }
+  return `${head("LCL_OBJECT_DTEL")}
+   <DD04V><ROLLNAME>${esc(e.name)}</ROLLNAME><DDLANGUAGE>S</DDLANGUAGE>${typing}<HEADLEN>55</HEADLEN><SCRLEN1>10</SCRLEN1><SCRLEN2>20</SCRLEN2><SCRLEN3>40</SCRLEN3><DDTEXT>${esc(e.description)}</DDTEXT><REPTEXT>${esc(l.heading || l.long || e.description)}</REPTEXT><SCRTEXT_S>${esc(l.short || "")}</SCRTEXT_S><SCRTEXT_M>${esc(l.medium || "")}</SCRTEXT_M><SCRTEXT_L>${esc(l.long || "")}</SCRTEXT_L><DTELMASTER>S</DTELMASTER>${e.domain ? "<REFKIND>D</REFKIND>" : ""}</DD04V>${tail}`;
+}
+
+export function validateDomain(d) {
+  const errors = [];
+  if (!/^[YZ][A-Z0-9_]{1,29}$/.test(d.name)) errors.push("El nombre debe empezar por Z o Y (máximo 30 caracteres).");
+  if (!d.description?.trim()) errors.push("Falta la descripción breve.");
+  const t = DDIC_TYPES[d.type];
+  if (!t || d.type === "CLNT") errors.push("Tipo de datos no válido.");
+  else if (t.needsLen) {
+    const l = Number(d.length);
+    if (!l || l < 1 || l > t.maxLen) errors.push(`Longitud entre 1 y ${t.maxLen}.`);
+    if (t.decimals && (Number(d.decimals) || 0) >= l) errors.push("Los decimales deben ser menores que la longitud.");
+  }
+  const seen = new Set();
+  for (const v of d.values || []) {
+    if (!v.low) continue;
+    if (seen.has(v.low)) errors.push(`El valor fijo ${v.low} está repetido.`);
+    seen.add(v.low);
+    if (t?.needsLen && v.low.length > Number(d.length)) errors.push(`El valor fijo ${v.low} es más largo que el dominio.`);
+  }
+  return errors;
+}
+
+export function validateDtel(e, domainExists) {
+  const errors = [];
+  if (!/^[YZ][A-Z0-9_]{1,29}$/.test(e.name)) errors.push("El nombre debe empezar por Z o Y (máximo 30 caracteres).");
+  if (!e.description?.trim()) errors.push("Falta la descripción breve.");
+  if (e.domain) {
+    if (!domainExists(e.domain)) errors.push(`El dominio ${e.domain} no existe o no está activo.`);
+  } else {
+    const t = DDIC_TYPES[e.type];
+    if (!t || e.type === "CLNT") errors.push("Indique un dominio o un tipo predefinido válido.");
+    else if (t.needsLen && !(Number(e.length) >= 1 && Number(e.length) <= t.maxLen)) errors.push(`Longitud entre 1 y ${t.maxLen}.`);
+  }
+  const l = e.labels || {};
+  if (!l.short && !l.medium && !l.long) errors.push("Indique al menos una denominación de campo (corta, media o larga).");
+  if ((l.short || "").length > 10) errors.push("La denominación corta tiene máximo 10 caracteres.");
+  if ((l.medium || "").length > 20) errors.push("La denominación media tiene máximo 20 caracteres.");
   return errors;
 }

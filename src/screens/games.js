@@ -4,6 +4,7 @@ import { store } from "../store.js";
 import { GAMES, GAME_TYPES, parseFill, fillSolution, sameAnswer, compareOutput, levelFor, MAX_POINTS } from "../games/data.js";
 import { STANDARD_TABLES } from "../engine/standard.js";
 import { repoContext } from "./se38.js";
+import { allTablesForEngine } from "../ddic-repo.js";
 
 const typeOf = (g) => GAME_TYPES.find((t) => t.id === g.type);
 const progress = () => (store.data.games ||= {});
@@ -29,7 +30,7 @@ function attempt(g) {
 
 async function runCode(app, source) {
   const ctx = {
-    tables: [...Object.values(STANDARD_TABLES), ...store.activeTables()],
+    tables: allTablesForEngine(),
     texts: {},
     seltexts: {},
     user: store.data.settings.user,

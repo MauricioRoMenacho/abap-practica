@@ -5,6 +5,8 @@ import { findTable } from "./se11.js";
 import { formatCell } from "./alv.js";
 import { DDIC_TYPES } from "../engine/ddic.js";
 import { STANDARD_TABLES } from "../engine/standard.js";
+import { tableDef, f4Values, checkForeignKey } from "../ddic-repo.js";
+import { pickFrom } from "./se11.js";
 
 const KIND = { CHAR: "C", CLNT: "C", CUKY: "C", UNIT: "C", LANG: "C", STRING: "C", NUMC: "N", INT1: "I", INT2: "I", INT4: "I", DEC: "P", CURR: "P", QUAN: "P", DATS: "D", TIMS: "T", FLTP: "F" };
 
@@ -13,10 +15,7 @@ function colInfo(f) {
 }
 
 function activeDef(n) {
-  const f = findTable(n);
-  if (!f) return null;
-  if (f.standard) return f.def;
-  return f.def.active || null;
+  return tableDef(n);
 }
 
 export function toDb(f, raw) {
@@ -258,7 +257,17 @@ export function se16DataScreen(app, n, q = {}) {
             : h("input", { class: "sap-input" + (["P", "I", "F"].includes(colInfo(f).kind) ? " num" : ""), value: val, readonly: ro || isKeyLocked, placeholder: f.type === "DATS" ? "DD.MM.AAAA" : f.type === "TIMS" ? "HH:MM:SS" : "", maxlength: f.type === "CHAR" ? f.length : undefined });
         if (f.type === "STRING") el.value = val;
         ins[f.name] = el;
-        return [h("label", { class: f.key ? "required" : "", title: f.description }, f.name, h("span", { class: "muted small" }, " " + (f.description || ""))), el];
+        // F4: valores fijos del dominio o tabla de verificación
+        const hasF4 = !ro && !isKeyLocked && (f.fixedValues?.length || f.checkTable || f.valueTable);
+        const openF4 = async () => {
+          const r = f4Values(app.engine, f);
+          if (!r || !r.rows.length) return app.status("No hay valores posibles para este campo", "W");
+          const chosen = await pickFrom(`${f.name}: valores posibles` + (r.table ? ` (${r.table})` : ""), r.rows.map((x) => [x.value, x.text]));
+          if (chosen !== null) el.value = chosen;
+        };
+        if (hasF4) el.addEventListener("keydown", (e) => { if (e.key === "F4") { e.preventDefault(); e.stopPropagation(); openF4(); } });
+        const ctl = hasF4 ? h("div", { class: "row", style: { margin: 0, flexWrap: "nowrap" } }, el, h("button", { class: "btn f4", title: "Valores posibles (F4)", onclick: (e) => { e.preventDefault(); openF4(); } }, "F4")) : el;
+        return [h("label", { class: f.key ? "required" : "", title: f.description }, f.name, h("span", { class: "muted small" }, " " + (f.description || ""))), ctl];
       }),
     );
     const title = mode === "show" ? `Tabla ${n}: Visualizar entrada` : mode === "change" ? `Tabla ${n}: Modificar entrada` : `Tabla ${n}: Crear entrada`;
@@ -283,7 +292,19 @@ export function se16DataScreen(app, n, q = {}) {
           err = c.error;
           break;
         }
-        values[f.name.toLowerCase()] = c.value;
+        let v = c.value;
+        if (typeof v === "string" && f.domain && !f.lowercase) v = v.toUpperCase();
+        // valores fijos del dominio
+        if (f.fixedValues?.length && v !== "" && !f.fixedValues.some((x) => x.low === v)) {
+          err = `${f.name}: el valor "${v}" no está en el ámbito de valores del dominio ${f.domain} (pulse F4 para ver los valores posibles)`;
+          break;
+        }
+        // clave externa: el valor debe existir en la tabla de verificación
+        if (f.checkTable && v !== "" && !checkForeignKey(app.engine, f, v)) {
+          err = `${f.name}: la entrada "${v}" no existe en la tabla de verificación ${f.checkTable} (pulse F4)`;
+          break;
+        }
+        values[f.name.toLowerCase()] = v;
       }
       if (err) {
         app.status(err, "E");

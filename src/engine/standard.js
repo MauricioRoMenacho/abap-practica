@@ -665,3 +665,58 @@ function moreRows(sflight) {
   }
   return { T001, T005, TCURC, KNA1, LFA1, MARA, MAKT, VBAK, VBAP, EKKO, EKPO, PA0001, PA0002, PA0008, SCUSTOM, SBOOK };
 }
+
+// claves externas (tablas de verificación) y valores fijos de las tablas estándar
+const CHECKS = {
+  "SCARR-CURRCODE": "TCURC",
+  "SPFLI-CARRID": "SCARR",
+  "SFLIGHT-CARRID": "SCARR",
+  "SFLIGHT-CURRENCY": "TCURC",
+  "SBOOK-CARRID": "SCARR",
+  "SBOOK-CUSTOMID": "SCUSTOM",
+  "T001-LAND1": "T005",
+  "T001-WAERS": "TCURC",
+  "T005-WAERS": "TCURC",
+  "KNA1-LAND1": "T005",
+  "LFA1-LAND1": "T005",
+  "VBAK-KUNNR": "KNA1",
+  "VBAK-BUKRS_VF": "T001",
+  "VBAK-WAERK": "TCURC",
+  "VBAP-MATNR": "MARA",
+  "EKKO-LIFNR": "LFA1",
+  "EKKO-BUKRS": "T001",
+  "EKPO-MATNR": "MARA",
+  "MAKT-MATNR": "MARA",
+  "PA0001-BUKRS": "T001",
+};
+const FIXED = {
+  "SBOOK-CLASS": [
+    { low: "Y", text: "Económica" },
+    { low: "C", text: "Business" },
+    { low: "F", text: "Primera" },
+  ],
+  "SBOOK-CUSTTYPE": [
+    { low: "B", text: "Empresa" },
+    { low: "P", text: "Particular" },
+  ],
+  "SCUSTOM-CUSTTYPE": [
+    { low: "B", text: "Empresa" },
+    { low: "P", text: "Particular" },
+  ],
+  "PA0002-GESCH": [
+    { low: "1", text: "Masculino" },
+    { low: "2", text: "Femenino" },
+  ],
+  "MARA-MTART": [
+    { low: "HAWA", text: "Mercaderías" },
+    { low: "ROH", text: "Materia prima" },
+    { low: "FERT", text: "Producto terminado" },
+  ],
+};
+for (const t of Object.values(STANDARD_TABLES)) {
+  for (const f of t.fields) {
+    const k = t.name + "-" + f.name;
+    if (CHECKS[k]) f.checkTable = CHECKS[k];
+    if (FIXED[k]) f.fixedValues = FIXED[k];
+  }
+}

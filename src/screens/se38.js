@@ -554,7 +554,7 @@ export function ctxFor(name, mode = "active") {
   const texts = { ...(p?.texts?.[other] || {}), ...Object.fromEntries(Object.entries(p?.texts?.[lang] || {}).filter(([, v]) => v)) };
   const seltexts = { ...(p?.seltexts?.[other] || {}), ...Object.fromEntries(Object.entries(p?.seltexts?.[lang] || {}).filter(([, v]) => v)) };
   return {
-    tables: [...app_standard(), ...store.activeTables()],
+    tables: allTablesForEngine(),
     texts,
     seltexts,
     user: store.data.settings.user,
@@ -596,12 +596,14 @@ export function expandedSource(name) {
 
 import { STANDARD_TABLES } from "../engine/standard.js";
 import { allMsgClasses, msagXml, msgTexts } from "./se91.js";
+import { allTablesForEngine, ddicExtraFiles } from "../ddic-repo.js";
 
 // objetos del repositorio que todo programa puede usar (mensajes, diccionario, funciones...)
 export function repoContext() {
   const lang = store.data.settings.lang || "S";
   const extraFiles = [];
   for (const mc of Object.values(allMsgClasses())) extraFiles.push({ filename: mc.name.toLowerCase() + ".msag.xml", contents: msagXml(mc) });
+  extraFiles.push(...ddicExtraFiles());
   return { extraFiles, msgTexts: msgTexts(lang) };
 }
 

@@ -43,7 +43,8 @@ async function boot() {
     onDbChange: (bytes) => store.saveDb(bytes),
   });
   await engine.openDb(store.loadDb());
-  await engine.syncSchema(store.activeTables());
+  const { activeTablesResolved, ddicExtraFiles } = await import("./ddic-repo.js");
+  await engine.syncSchema(activeTablesResolved(), ddicExtraFiles());
 
   root.replaceChildren();
   const transactions = {

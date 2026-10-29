@@ -3,6 +3,7 @@ import { h, dialog, confirm, input, field } from "../ui.js";
 import { store } from "../store.js";
 import { DDIC_TYPES, validateTable, fieldLength } from "../engine/ddic.js";
 import { STANDARD_TABLES } from "../engine/standard.js";
+import { activeTablesResolved, ddicExtraFiles, dtels, domains, activeDtel, resolveField, tableDef } from "../ddic-repo.js";
 
 export function findTable(name) {
   const n = name.toUpperCase();
@@ -37,47 +38,97 @@ async function pickTable() {
   return r ? chosen : null;
 }
 
-export function se11Screen(app) {
-  let nameInput;
-  const name = () => nameInput.value.trim().toUpperCase();
-  const open = (mode) => {
-    const n = name();
-    if (!n) return app.status("Indique un nombre de tabla", "E");
-    const f = findTable(n);
-    if (!f) return app.status(`La tabla ${n} no existe`, "E");
-    store.data.lastTable = n;
+export function se11Screen(app, presetKind) {
+  let kind = presetKind || store.data.lastDdicKind || "TABL";
+  const inputs = {};
+  const name = () => inputs[kind].value.trim().toUpperCase();
+  const KINDS = [
+    ["TABL", "Tabla base datos", 16, () => store.data.lastTable],
+    ["DTEL", "Tipo de datos (elemento de datos)", 30, () => store.data.lastDtel],
+    ["DOMA", "Dominio", 30, () => store.data.lastDoma],
+  ];
+  const remember = (n) => {
+    store.data.lastDdicKind = kind;
+    if (kind === "TABL") store.data.lastTable = n;
+    if (kind === "DTEL") store.data.lastDtel = n;
+    if (kind === "DOMA") store.data.lastDoma = n;
     store.save();
-    if (f.standard && mode === "change") app.status("Las tablas estándar no se pueden modificar (solo visualizar)", "W");
-    app.push(tableScreen(app, n, f.standard ? "show" : mode));
   };
-  const create = () => {
+  const open = async (mode) => {
     const n = name();
-    if (!n) return app.status("Indique un nombre de tabla", "E");
+    if (!n) return app.status("Indique un nombre", "E");
+    if (kind === "TABL") {
+      const f = findTable(n);
+      if (!f) return app.status(`La tabla ${n} no existe`, "E");
+      remember(n);
+      if (f.standard && mode === "change") app.status("Las tablas estándar no se pueden modificar (solo visualizar)", "W");
+      return app.push(tableScreen(app, n, f.standard ? "show" : mode));
+    }
+    const T = await import("./se11-types.js");
+    const obj = kind === "DTEL" ? dtels()[n] : domains()[n];
+    if (!obj) return app.status(`${kind === "DTEL" ? "El elemento de datos" : "El dominio"} ${n} no existe`, "E");
+    remember(n);
+    app.push(kind === "DTEL" ? T.dtelScreen(app, n, mode) : T.domainScreen(app, n, mode));
+  };
+  const create = async () => {
+    const n = name();
+    if (!n) return app.status("Indique un nombre", "E");
     if (!/^[YZ]/.test(n)) return app.status("Inicie el nombre con Y o Z (espacio de nombres del cliente)", "E");
-    if (!/^[YZ][A-Z0-9_]{1,15}$/.test(n)) return app.status("Nombre no válido: máximo 16 caracteres (letras, números, _)", "E");
-    if (findTable(n)) return app.status(`La tabla ${n} ya existe`, "E");
-    store.data.tables[n] = {
-      name: n,
-      description: "",
-      deliveryClass: "A",
-      fields: [{ name: "MANDT", key: true, type: "CLNT", length: 3, decimals: 0, description: "Mandante" }],
-      active: null,
-      created: new Date().toISOString(),
-    };
-    store.data.lastTable = n;
-    store.save();
-    app.push(tableScreen(app, n, "change", true));
+    if (kind === "TABL") {
+      if (!/^[YZ][A-Z0-9_]{1,15}$/.test(n)) return app.status("Nombre no válido: máximo 16 caracteres (letras, números, _)", "E");
+      if (findTable(n)) return app.status(`La tabla ${n} ya existe`, "E");
+      store.data.tables[n] = {
+        name: n,
+        description: "",
+        deliveryClass: "A",
+        fields: [{ name: "MANDT", key: true, type: "CLNT", length: 3, decimals: 0, description: "Mandante" }],
+        active: null,
+        created: new Date().toISOString(),
+      };
+      remember(n);
+      return app.push(tableScreen(app, n, "change", true));
+    }
+    if (!/^[YZ][A-Z0-9_]{1,29}$/.test(n)) return app.status("Nombre no válido: máximo 30 caracteres (letras, números, _)", "E");
+    const T = await import("./se11-types.js");
+    if (kind === "DTEL") {
+      if (dtels()[n]) return app.status(`El elemento de datos ${n} ya existe`, "E");
+      dtels()[n] = { name: n, description: "", domain: "", type: "CHAR", length: 10, decimals: 0, labels: {}, active: null };
+      remember(n);
+      return app.push(T.dtelScreen(app, n, "change", true));
+    }
+    if (domains()[n]) return app.status(`El dominio ${n} ya existe`, "E");
+    domains()[n] = { name: n, description: "", type: "CHAR", length: 10, decimals: 0, lowercase: false, values: [], valueTable: "", active: null };
+    remember(n);
+    app.push(T.domainScreen(app, n, "change", true));
   };
   const del = async () => {
     const n = name();
-    const f = findTable(n);
-    if (!f) return app.status(`La tabla ${n} no existe`, "E");
-    if (f.standard) return app.status("Las tablas estándar no se pueden borrar", "E");
-    if (!(await confirm(`¿Borrar la tabla ${n} y TODOS sus datos?`, "Borrar tabla", "Borrar", "Cancelar"))) return;
-    delete store.data.tables[n];
+    if (kind === "TABL") {
+      const f = findTable(n);
+      if (!f) return app.status(`La tabla ${n} no existe`, "E");
+      if (f.standard) return app.status("Las tablas estándar no se pueden borrar", "E");
+      if (!(await confirm(`¿Borrar la tabla ${n} y TODOS sus datos?`, "Borrar tabla", "Borrar", "Cancelar"))) return;
+      delete store.data.tables[n];
+      store.save();
+      await app.engine.syncSchema(activeTablesResolved(), ddicExtraFiles());
+      return app.status(`Tabla ${n} borrada`, "S");
+    }
+    const coll = kind === "DTEL" ? dtels() : domains();
+    if (!coll[n]) return app.status(`${n} no existe`, "E");
+    const usedBy = kind === "DTEL" ? store.tables().filter((t) => t.fields.some((f) => (f.dtel || "").toUpperCase() === n)).map((t) => t.name) : Object.values(dtels()).filter((e) => (e.domain || "").toUpperCase() === n).map((e) => e.name);
+    if (usedBy.length) return app.status(`No se puede borrar: se usa en ${usedBy.join(", ")}`, "E");
+    if (!(await confirm(`¿Borrar ${n}?`, "Borrar", "Borrar", "Cancelar"))) return;
+    delete coll[n];
     store.save();
-    await app.engine.syncSchema(store.activeTables());
-    app.status(`Tabla ${n} borrada`, "S");
+    app.status(`${n} borrado`, "S");
+  };
+  const pick = async () => {
+    let items = [];
+    if (kind === "TABL") items = [...Object.values(STANDARD_TABLES), ...store.tables()].map((t) => [t.name, t.description + (t.standard ? " (estándar)" : t.active ? "" : " (inactiva)")]);
+    else items = Object.values(kind === "DTEL" ? dtels() : domains()).map((x) => [x.name, (x.description || "") + (x.active ? "" : " (inactivo)")]);
+    if (!items.length) return app.status("No hay objetos de este tipo todavía", "W");
+    const r = await pickFrom("Ayuda para búsqueda (F4)", items);
+    if (r) inputs[kind].value = r;
   };
   return {
     id: "SE11",
@@ -87,26 +138,28 @@ export function se11Screen(app) {
     keys: { F7: () => open("show"), F6: () => open("change"), F5: create },
     onEnter: () => open("show"),
     render(el) {
-      nameInput = input({ maxlength: 16, value: store.data.lastTable || "", class: "sap-input upper w-20", autofocus: true, oninput: (e) => (e.target.value = e.target.value.toUpperCase()) });
-      nameInput.addEventListener("keydown", async (e) => {
-        if (e.key === "F4") {
-          e.preventDefault();
-          const p = await pickTable();
-          if (p) nameInput.value = p;
-        }
-      });
+      const list = h(
+        "div",
+        { class: "radio-list" },
+        KINDS.map(([k, label, max, last]) => {
+          const inp = input({ maxlength: max, value: last() || "", class: "sap-input upper w-30", oninput: (e) => (e.target.value = e.target.value.toUpperCase()), onfocus: () => { kind = k; radio.checked = true; } });
+          inp.addEventListener("keydown", (e) => {
+            if (e.key === "F4") {
+              e.preventDefault();
+              pick();
+            }
+          });
+          inputs[k] = inp;
+          const radio = h("input", { type: "radio", name: "obj", checked: kind === k, onchange: () => { kind = k; inp.focus(); } });
+          return h("label", { class: "radio" }, radio, h("span", { class: "radio-l" }, label), inp, h("button", { class: "btn f4", title: "F4", onclick: (e) => { e.preventDefault(); kind = k; radio.checked = true; pick(); } }, "F4"));
+        }),
+        h("label", { class: "radio disabled" }, h("input", { type: "radio", name: "obj", disabled: true }), h("span", { class: "radio-l" }, "Vista"), h("span", { class: "muted small" }, "próximamente")),
+      );
       el.append(
         h(
           "div",
           { class: "panel narrow" },
-          h(
-            "div",
-            { class: "radio-list" },
-            h("label", { class: "radio" }, h("input", { type: "radio", name: "obj", checked: true }), h("span", { class: "radio-l" }, "Tabla base datos"), nameInput, h("button", { class: "btn f4", title: "F4", onclick: async () => { const p = await pickTable(); if (p) nameInput.value = p; } }, "F4")),
-            h("label", { class: "radio disabled" }, h("input", { type: "radio", name: "obj", disabled: true }), h("span", { class: "radio-l" }, "Vista"), h("span", { class: "muted small" }, "próximamente")),
-            h("label", { class: "radio disabled" }, h("input", { type: "radio", name: "obj", disabled: true }), h("span", { class: "radio-l" }, "Tipo de datos"), h("span", { class: "muted small" }, "próximamente")),
-            h("label", { class: "radio disabled" }, h("input", { type: "radio", name: "obj", disabled: true }), h("span", { class: "radio-l" }, "Dominio"), h("span", { class: "muted small" }, "próximamente")),
-          ),
+          list,
           h(
             "div",
             { class: "row buttons" },
@@ -114,11 +167,37 @@ export function se11Screen(app) {
             h("button", { class: "btn", onclick: () => open("change"), title: "F6" }, h("span", { class: "ico ico-change" }), "Modificar"),
             h("button", { class: "btn btn-primary", onclick: create, title: "F5" }, h("span", { class: "ico ico-create" }), "Crear"),
           ),
+          h("p", { class: "hint" }, "Orden habitual: 1) Dominio (tipo técnico y valores permitidos) → 2) Elemento de datos (significado y textos de cabecera) → 3) Tabla (campos que usan los elementos de datos)."),
           h("p", { class: "hint" }, "Tablas estándar para practicar (pulsa F4 para verlas todas): vuelos SCARR, SPFLI, SFLIGHT, SBOOK, SCUSTOM; finanzas T001, T005, TCURC; ventas KNA1, VBAK, VBAP; compras LFA1, EKKO, EKPO; materiales MARA, MAKT; personal PA0001, PA0002, PA0008."),
         ),
       );
+      setTimeout(() => inputs[kind]?.focus(), 20);
     },
   };
+}
+
+export async function pickFrom(title, items) {
+  let chosen = null;
+  const list = h(
+    "div",
+    { class: "f4-list" },
+    items.map(([v, t]) =>
+      h(
+        "button",
+        {
+          class: "f4-row",
+          onclick: (e) => {
+            chosen = v;
+            e.currentTarget.closest(".dlg-overlay").querySelector(".btn-primary").click();
+          },
+        },
+        h("b", {}, v),
+        h("span", {}, t || ""),
+      ),
+    ),
+  );
+  const r = await dialog({ title, body: list, width: "560px", buttons: [{ label: "Cancelar", value: false }, { label: "", value: true, primary: true }], onOpen: (o) => (o.querySelector(".btn-primary").style.display = "none") });
+  return r ? chosen : null;
 }
 
 function tableScreen(app, n, initialMode, isNew) {
@@ -163,7 +242,11 @@ function tableScreen(app, n, initialMode, isNew) {
   };
   const check = () => {
     readForm();
-    const errors = validateTable({ ...work, name: n });
+    const resolved = { ...work, name: n, fields: work.fields.map((f) => (f.dtel ? { ...resolveField(f), dtel: f.dtel } : f)) };
+    const errors = validateTable(resolved, {
+      dtelExists: (x) => !!activeDtel(x),
+      tableExists: (x) => !!tableDef(x) || x.toUpperCase() === n,
+    });
     if (errors.length) {
       dialog({ title: "Verificación de la tabla", icon: "error", width: "560px", body: h("ul", { class: "err-list" }, errors.map((e) => h("li", {}, e))) });
       app.status(`La tabla ${n} tiene errores`, "E");
@@ -181,7 +264,7 @@ function tableScreen(app, n, initialMode, isNew) {
     t.active = stripTable({ ...t, name: n });
     store.save();
     try {
-      await app.engine.syncSchema(store.activeTables());
+      await app.engine.syncSchema(activeTablesResolved(), ddicExtraFiles());
       app.status(`Se ha activado la tabla ${n} (base de datos ajustada)`, "S");
     } catch (e) {
       console.error(e);
@@ -244,22 +327,64 @@ function tableScreen(app, n, initialMode, isNew) {
   const fieldsGrid = (ro) => {
     const tbody = h("tbody");
     work.fields.forEach((f, i) => {
-      const t = DDIC_TYPES[f.type] || {};
+      // con elemento de datos, el tipo técnico viene del elemento (y su dominio)
+      const rf = f.dtel ? resolveField(f) : f;
+      const viaDtel = !!f.dtel;
+      const t = DDIC_TYPES[rf.type] || {};
       const set = (k, v) => {
         f[k] = v;
         markDirty();
       };
+      const dtelInput = h("input", {
+        class: "sap-input upper mono" + (viaDtel && !activeDtel(f.dtel) ? " missing" : ""),
+        value: f.dtel || "",
+        maxlength: 30,
+        readonly: ro,
+        placeholder: "(predefinido)",
+        title: viaDtel ? (activeDtel(f.dtel) ? activeDtel(f.dtel).description : "Elemento de datos no existe o no está activo") : "Elemento de datos (vacío = tipo predefinido)",
+        style: { width: "16ch" },
+        oninput: (e) => {
+          e.target.value = e.target.value.toUpperCase();
+          f.dtel = e.target.value.trim();
+          markDirty();
+        },
+        onchange: () => setTimeout(render, 180),
+        onkeydown: async (e) => {
+          if (e.key !== "F4" || ro) return;
+          e.preventDefault();
+          const items = Object.values(dtels()).filter((x) => x.active).map((x) => [x.name, x.description]);
+          if (!items.length) return app.status("No hay elementos de datos activos. Créalos en SE11 → Tipo de datos.", "W");
+          const r = await pickFrom("Elementos de datos", items);
+          if (r) {
+            f.dtel = r;
+            markDirty();
+            render();
+          }
+        },
+      });
+      const checkInput = h("input", {
+        class: "sap-input upper mono",
+        value: f.checkTable || "",
+        maxlength: 16,
+        readonly: ro,
+        title: "Tabla de verificación (clave externa): el valor debe existir en esa tabla",
+        style: { width: "10ch" },
+        oninput: (e) => {
+          e.target.value = e.target.value.toUpperCase();
+          set("checkTable", e.target.value.trim());
+        },
+      });
       const lenInput = h("input", {
         class: "sap-input num",
-        value: t.fixedLen !== undefined ? fieldLength(f) || "" : f.length ?? "",
-        readonly: ro || t.fixedLen !== undefined,
+        value: t.fixedLen !== undefined ? fieldLength(rf) || "" : rf.length ?? "",
+        readonly: ro || viaDtel || t.fixedLen !== undefined,
         style: { width: "7ch" },
         oninput: (e) => set("length", Number(e.target.value) || ""),
       });
       const decInput = h("input", {
         class: "sap-input num",
-        value: t.decimals ? f.decimals ?? 0 : "",
-        readonly: ro || !t.decimals,
+        value: t.decimals ? rf.decimals ?? 0 : "",
+        readonly: ro || viaDtel || !t.decimals,
         style: { width: "5ch" },
         oninput: (e) => set("decimals", Number(e.target.value) || 0),
       });
@@ -270,6 +395,7 @@ function tableScreen(app, n, initialMode, isNew) {
           h("td", { class: "rownum" }, i + 1),
           h("td", {}, h("input", { class: "sap-input upper mono", value: f.name || "", maxlength: 30, readonly: ro, style: { width: "18ch" }, oninput: (e) => { e.target.value = e.target.value.toUpperCase(); set("name", e.target.value); } })),
           h("td", { class: "center" }, h("input", { type: "checkbox", checked: !!f.key, disabled: ro, onchange: (e) => { set("key", e.target.checked); render(); } })),
+          h("td", {}, dtelInput),
           h(
             "td",
             {},
@@ -277,7 +403,7 @@ function tableScreen(app, n, initialMode, isNew) {
               "select",
               {
                 class: "sap-input mono",
-                disabled: ro,
+                disabled: ro || viaDtel,
                 onchange: (e) => {
                   f.type = e.target.value;
                   const nt = DDIC_TYPES[f.type];
@@ -288,12 +414,13 @@ function tableScreen(app, n, initialMode, isNew) {
                   render();
                 },
               },
-              Object.entries(DDIC_TYPES).map(([k, v]) => h("option", { value: k, selected: f.type === k, title: v.label }, k)),
+              Object.entries(DDIC_TYPES).map(([k, v]) => h("option", { value: k, selected: rf.type === k, title: v.label }, k)),
             ),
           ),
           h("td", {}, lenInput),
           h("td", {}, decInput),
-          h("td", {}, h("input", { class: "sap-input", value: f.description || "", maxlength: 60, readonly: ro, style: { width: "100%" }, oninput: (e) => set("description", e.target.value) })),
+          h("td", {}, h("input", { class: "sap-input", value: f.description || "", placeholder: viaDtel ? rf.description || "" : "", maxlength: 60, readonly: ro, style: { width: "100%" }, oninput: (e) => set("description", e.target.value) })),
+          h("td", {}, checkInput),
           ro
             ? null
             : h(
@@ -312,7 +439,7 @@ function tableScreen(app, n, initialMode, isNew) {
       h(
         "table",
         { class: "grid-table fields" },
-        h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Campo"), h("th", {}, "Clave"), h("th", { title: "Tipo predefinido" }, "Tipo datos"), h("th", {}, "Longitud"), h("th", {}, "Decimales"), h("th", {}, "Descripción breve"), ro ? null : h("th", {}, ""))),
+        h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Campo"), h("th", {}, "Clave"), h("th", { title: "Elemento de datos (F4)" }, "Elemento datos"), h("th", { title: "Tipo predefinido" }, "Tipo datos"), h("th", {}, "Longitud"), h("th", {}, "Decimales"), h("th", {}, "Descripción breve"), h("th", { title: "Tabla de verificación (clave externa)" }, "Tabla verif."), ro ? null : h("th", {}, ""))),
         tbody,
       ),
       ro
@@ -321,7 +448,7 @@ function tableScreen(app, n, initialMode, isNew) {
             "div",
             { class: "row" },
             h("button", { class: "btn", onclick: () => { work.fields.push({ name: "", key: false, type: "CHAR", length: 20, decimals: 0, description: "" }); markDirty(); render(); setTimeout(() => body.querySelector("tbody tr:last-child input")?.focus(), 10); } }, "+ Insertar campo"),
-            h("span", { class: "hint" }, "Usamos tipos predefinidos (sin elementos de datos). El primer campo suele ser MANDT (CLNT) y los campos clave van al inicio."),
+            h("span", { class: "hint" }, "Cada campo usa un elemento de datos (recomendado, F4 para elegir) o un tipo predefinido. El primer campo suele ser MANDT (CLNT) y los campos clave van al inicio. Tabla verif.: el valor debe existir en esa tabla (clave externa)."),
           ),
       h(
         "details",
@@ -385,6 +512,11 @@ function stripTable(t) {
     name: t.name,
     description: t.description || "",
     deliveryClass: t.deliveryClass || "A",
-    fields: t.fields.map((f) => ({ name: (f.name || "").toUpperCase(), key: !!f.key, type: f.type, length: DDIC_TYPES[f.type]?.fixedLen ?? Number(f.length), decimals: DDIC_TYPES[f.type]?.decimals ? Number(f.decimals) || 0 : 0, description: f.description || "" })),
+    fields: t.fields.map((f) => {
+      const base = { name: (f.name || "").toUpperCase(), key: !!f.key, description: f.description || "" };
+      if (f.checkTable) base.checkTable = f.checkTable.toUpperCase();
+      if (f.dtel) return { ...base, dtel: f.dtel.toUpperCase() };
+      return { ...base, type: f.type, length: DDIC_TYPES[f.type]?.fixedLen ?? Number(f.length), decimals: DDIC_TYPES[f.type]?.decimals ? Number(f.decimals) || 0 : 0 };
+    }),
   };
 }
