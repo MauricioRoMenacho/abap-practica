@@ -430,6 +430,8 @@ export class App {
       ["Ctrl+F2", "Verificar sintaxis"],
       ["Ctrl+F3", "Activar"],
       ["Shift+F1", "Pretty Printer (formatear código)"],
+      ["F5 / F6 / F8", "Depurador: paso a paso / ejecutar sin entrar / continuar"],
+      ["Clic en el margen", "Editor: poner o quitar un punto de parada"],
       ["/nSE38", "Abrir una transacción desde cualquier pantalla"],
     ];
     dialog({
@@ -446,7 +448,7 @@ export class App {
         "div",
         { class: "dlg-text" },
         h("p", {}, "El código ABAP se ejecuta en tu navegador gracias al transpilador open source de abaplint (ABAP → JavaScript). Soporta la gran mayoría del ABAP moderno y clásico:"),
-        h("ul", {}, h("li", {}, "DATA, TYPES, tablas internas, LOOP, READ TABLE, SORT, expresiones en línea, string templates"), h("li", {}, "Clases locales, interfaces, excepciones TRY/CATCH, FORM/PERFORM"), h("li", {}, "Open SQL: SELECT (con JOIN, GROUP BY, SUM...), INSERT, UPDATE, MODIFY, DELETE sobre tus tablas Z y las estándar"), h("li", {}, "Pantalla de selección: PARAMETERS, SELECT-OPTIONS, bloques, checkbox, radiobuttons"), h("li", {}, "Eventos: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION"), h("li", {}, "ALV con CL_SALV_TABLE (funciones, columnas, orden, totales, cebra, título)")),
+        h("ul", {}, h("li", {}, "DATA, TYPES, tablas internas, LOOP, READ TABLE, SORT, expresiones en línea, string templates"), h("li", {}, "Clases locales, interfaces, excepciones TRY/CATCH, FORM/PERFORM"), h("li", {}, "Open SQL: SELECT (con JOIN, GROUP BY, SUM...), INSERT, UPDATE, MODIFY, DELETE sobre tus tablas Z y las estándar"), h("li", {}, "Pantalla de selección: PARAMETERS, SELECT-OPTIONS, bloques, checkbox, radiobuttons"), h("li", {}, "Eventos: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION"), h("li", {}, "ALV con CL_SALV_TABLE (funciones, columnas, orden, totales, cebra, título)"), h("li", {}, "Programas include y depurador (puntos de parada, BREAK-POINT, F5/F6/F8)")),
         h("p", {}, "No disponible por ahora: dynpros (CALL SCREEN), Smartforms/Adobe Forms, funciones RFC/BAPI reales, paquetes y órdenes de transporte."),
         h("p", { class: "hint" }, "Todo se guarda en tu navegador (localStorage). Usa Sistema → Exportar para hacer un respaldo."),
       ),

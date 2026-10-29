@@ -2,6 +2,7 @@
 import { h, dialog, download } from "../ui.js";
 import { store } from "../store.js";
 import { alvScreen } from "./alv.js";
+import { debuggerScreen } from "./debugger.js";
 import { formatDate, formatTime } from "../engine/output.js";
 
 const selMemory = {};
@@ -12,10 +13,47 @@ export async function runProgram(app, name, opts = {}) {
   if (!p) return app.status(`El programa ${name} no existe`, "E");
   if (p.activeSource === null) return app.status(`El programa ${name} no está activo. Actívelo primero (Ctrl+F3)`, "E");
   const ctx = ctxFor(name);
+  ctx.debug = { startStep: opts.debug === "step", breakpoints: new Set(Object.keys(store.data.breakpoints || {})) };
   const session = opts.session || { selScreen: null, name };
   const runRecord = { at: new Date().toISOString(), hadScreen: false, alvs: [], listLines: 0 };
 
+  // ---- depurador: la pantalla se reutiliza entre paradas ----
+  let dbgScreen = null;
+  let dbgTimer = null;
+  const removeDebugger = () => {
+    clearTimeout(dbgTimer);
+    if (!dbgScreen) return;
+    const i = app.stack.indexOf(dbgScreen);
+    if (i >= 0) {
+      const wasTop = i === app.stack.length - 1;
+      app.stack.splice(i, 1);
+      if (wasTop && app.current()) app.show(app.current());
+    }
+    dbgScreen = null;
+  };
+  const onDbgAction = (action) => {
+    if (action === "run" || action === "stop") return removeDebugger();
+    // paso a paso: si no hay otra parada enseguida, se cierra el depurador
+    clearTimeout(dbgTimer);
+    dbgTimer = setTimeout(removeDebugger, 300);
+  };
+
   const ui = {
+    debug: (state) =>
+      new Promise((resolve) => {
+        clearTimeout(dbgTimer);
+        stopBusy();
+        if (!store.data.debugUsed) {
+          store.data.debugUsed = true;
+          store.save();
+        }
+        if (dbgScreen && app.current() === dbgScreen) dbgScreen.update(state, resolve);
+        else {
+          if (dbgScreen) removeDebugger();
+          dbgScreen = debuggerScreen(app, state, resolve, onDbgAction);
+          app.push(dbgScreen);
+        }
+      }),
     status: (t, ty) => app.status(t, ty),
     popup: (t, like) => dialog({ title: "Información", body: t, icon: like === "E" ? "error" : like === "W" ? "warning" : "info" }),
     selectionScreen: (meta, values, msg) =>
@@ -55,6 +93,7 @@ export async function runProgram(app, name, opts = {}) {
     const orig = ui[k];
     ui[k] = (...a) => {
       stopBusy();
+      removeDebugger();
       return orig(...a);
     };
   }
@@ -62,6 +101,7 @@ export async function runProgram(app, name, opts = {}) {
     res = await app.engine.run({ name, source: p.activeSource }, ctx, ui);
   } finally {
     stopBusy();
+    removeDebugger();
   }
   if (session.selScreen?.lastValues) selMemory[name] = session.selScreen.lastValues;
 
@@ -81,7 +121,7 @@ export async function runProgram(app, name, opts = {}) {
         s.destroy?.();
       }
       app.show(session.selScreen);
-      runProgram(app, name, { ...opts, session });
+      runProgram(app, name, { ...opts, debug: undefined, session });
       return true;
     }
     return false;
@@ -117,7 +157,7 @@ export async function runProgram(app, name, opts = {}) {
   if (res.list?.length) {
     app.push(listScreen(app, name, p.title, res.list, () => rerunIfScreen()));
   } else if (session.selScreen && app.current() === session.selScreen) {
-    runProgram(app, name, { ...opts, session });
+    runProgram(app, name, { ...opts, debug: undefined, session });
   } else if (res.status === "ok" && runRecord.alvs.length === 0) {
     app.status(app.statusMsg.textContent || "El programa terminó sin generar salida (sin WRITE ni ALV)", app.statusMsg.textContent ? undefined : "I");
   }

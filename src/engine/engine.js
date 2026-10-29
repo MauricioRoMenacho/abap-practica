@@ -5,6 +5,7 @@ import { TranspileTypes } from "@abaplint/transpiler/build/src/transpile_types.j
 import { ABAP, MemoryConsole } from "@abaplint/runtime";
 import { preprocess } from "./preprocess.js";
 import { expandIncludes } from "./includes.js";
+import { instrument, snapshot } from "./debug.js";
 import { tableToXml } from "./ddic.js";
 import { STANDARD_TABLES, standardRows } from "./standard.js";
 import { formatValue, ListOutput } from "./output.js";
@@ -176,11 +177,19 @@ export class Engine {
   }
 
   // ---------------- compilación ----------------
-  buildRegistry(program, ctx) {
+  buildRegistry(program, ctx, debug = false) {
     const resolve = ctx.resolveInclude || (() => null);
     const exp = expandIncludes(program.source, program.name, resolve);
-    const pp = preprocess(exp.source, program.name, ctx.texts || {});
+    let src = exp.source;
+    let dbgTable = null;
+    if (debug) {
+      const inst = instrument(src, exp.map, program.name);
+      src = inst.source;
+      dbgTable = inst.table;
+    }
+    const pp = preprocess(src, program.name, ctx.texts || {});
     pp.expansion = exp;
+    pp.dbgTable = dbgTable;
     const progFile = program.name.toLowerCase() + ".prog.abap";
     const files = [
       ...this.libFiles.map((f) => new abaplint.MemoryFile(f.filename, f.contents)),
@@ -229,9 +238,25 @@ export class Engine {
     return { errors: all, reg, pp, progFile };
   }
 
-  async compile(program, ctx) {
-    const chk = this.check(program, ctx);
+  // ¿hay que instrumentar para depurar? (BREAK-POINT, puntos de parada o depuración pedida)
+  needsDebug(program, ctx) {
+    const d = ctx.debug;
+    if (!d) return false;
+    if (d.startStep) return true;
+    const exp = expandIncludes(program.source, program.name, ctx.resolveInclude || (() => null));
+    if (/^\s*BREAK-POINT\b/im.test(exp.source)) return true;
+    const objs = new Set(exp.map.map((m) => m.obj));
+    for (const bp of d.breakpoints || []) if (objs.has(String(bp).split(":")[0])) return true;
+    return false;
+  }
+
+  async compile(program, ctx, debug = false) {
+    let chk = this.check(program, ctx);
     if (chk.errors.length > 0) return { errors: chk.errors };
+    if (debug) {
+      const dbg = this.buildRegistry(program, ctx, true);
+      chk = { ...chk, reg: dbg.reg, pp: dbg.pp };
+    }
     const res = await new Transpiler({ unknownTypes: "runtimeError" }).run(chk.reg);
     // orden: tablas, interfaces, clases (superclase primero), programa
     const objs = res.objects;
@@ -295,13 +320,14 @@ export class Engine {
       .join("\n");
     const unsupported = [];
     for (const m of progCode.matchAll(/throw new Error\("([^"]*transpiler[^"]*)"\)/g)) unsupported.push(m[1]);
-    return { code: code + "\n" + progCode, meta: chk.pp.meta, unsupported };
+    return { code: code + "\n" + progCode, meta: chk.pp.meta, unsupported, dbgTable: chk.pp.dbgTable };
   }
 
   // ---------------- ejecución ----------------
   async run(program, ctx, ui) {
     const t0 = performance.now();
-    const comp = await this.compile(program, ctx);
+    const debugging = this.needsDebug(program, ctx);
+    const comp = await this.compile(program, ctx, debugging);
     if (comp.errors) return { status: "syntax", errors: comp.errors };
     const tCompile = performance.now() - t0;
 
@@ -456,6 +482,61 @@ export class Engine {
       phase = "start";
       if (forms.top) await forms.top();
     };
+
+    // ---- depurador ----
+    if (debugging && comp.dbgTable) {
+      const table = comp.dbgTable;
+      const bps = ctx.debug.breakpoints || new Set();
+      let mode = ctx.debug.startStep ? "step" : "run";
+      let overScope = null;
+      globalThis.__abapDbg = async (id, ev, forced) => {
+        const info = table[id];
+        if (!info) return;
+        let stop = forced || mode === "step" || bps.has(info.obj + ":" + info.line);
+        if (!stop && mode === "over" && (info.scope === overScope || info.scope === "_program")) stop = true;
+        if (!stop) return;
+        const vars = info.vars.map((v) => {
+          let val;
+          const tries = [v.js];
+          if (/^[a-z_][a-z0-9_$]*$/.test(v.js)) tries.push("this." + v.js, "this.constructor." + v.js);
+          let ok = false;
+          for (const expr of tries) {
+            try {
+              val = ev(expr);
+              if (val !== undefined) {
+                ok = true;
+                break;
+              }
+            } catch {
+              /* probar la siguiente forma */
+            }
+          }
+          if (!ok) return { name: v.name, kind: "na", note: "aún no declarada" };
+          return { name: v.name, ...snapshot(val, abap) };
+        });
+        const syv = (f) => {
+          try {
+            return String(sy[f]?.get?.() ?? "").trim();
+          } catch {
+            return "";
+          }
+        };
+        pauseClock();
+        const action = await ui.debug({
+          obj: info.obj,
+          line: info.line,
+          reason: forced ? "BREAK-POINT" : mode === "step" || mode === "over" ? "paso" : "punto de parada",
+          vars,
+          sy: { subrc: syv("subrc"), tabix: syv("tabix"), index: syv("index"), dbcnt: syv("dbcnt"), datum: syv("datum"), uname: syv("uname") },
+        });
+        resumeClock();
+        if (action === "stop") throw new AbapCancel();
+        if (action === "over") {
+          mode = "over";
+          overScope = info.scope;
+        } else mode = action === "step" ? "step" : "run";
+      };
+    }
 
     const tRun = performance.now();
     let result;

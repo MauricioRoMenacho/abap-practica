@@ -102,6 +102,7 @@ export function createEditor(el, value, readOnly) {
     tabSize: 2,
     wordBasedSuggestions: "off",
     rulers: [72],
+    glyphMargin: true,
   });
   window.__editor = editor;
   return editor;

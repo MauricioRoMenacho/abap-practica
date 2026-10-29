@@ -783,6 +783,28 @@ ENDLOOP.`),
         hint: "Ejecuta ZP3_OPERACIONES.",
       },
       {
+        id: "p3s2d",
+        title: "El depurador: mira tu programa por dentro",
+        body: [
+          "El <b>depurador</b> detiene el programa en una línea y te deja avanzar instrucción por instrucción viendo el valor de cada variable. Es la herramienta más usada para encontrar errores.",
+          "<b>1)</b> Abre <code>ZP3_OPERACIONES</code> en SE38 (modo modificar).",
+          "<b>2)</b> Haz clic en el margen izquierdo, junto al número de la línea del <code>LOOP AT lt_productos ASSIGNING ...</code>: aparece un punto rojo. Eso es un <b>punto de parada</b>.",
+          "<b>3)</b> Pulsa <kbd>F8</kbd>. El programa se detiene en esa línea y se abre el <b>Depurador ABAP</b>: a la izquierda el código con la línea actual marcada en amarillo; a la derecha los campos del sistema y las variables.",
+          "<b>4)</b> Haz clic en <code>LT_PRODUCTOS</code> en la lista de variables para ver su contenido. Pulsa <kbd>F5</kbd> varias veces y observa cómo cambia el precio de cada línea y el valor de <code>sy-tabix</code>.",
+          "<b>5)</b> Pulsa <kbd>F8</kbd> para continuar hasta el final. Para quitar el punto de parada, vuelve a hacer clic sobre él.",
+          syntax([
+            ["F5 Paso a paso", "Ejecuta la siguiente instrucción. Si es un PERFORM o una llamada a un método, entra en él."],
+            ["F6 Ejecutar", "Ejecuta la siguiente instrucción sin entrar en FORMs ni métodos (los ejecuta completos)."],
+            ["F8 Continuar", "Sigue ejecutando hasta el próximo punto de parada o hasta el final del programa."],
+            ["Finalizar", "Termina el programa en ese momento."],
+            ["BREAK-POINT.", "Instrucción que detiene el programa en el depurador al llegar a esa línea, sin necesidad de poner el punto rojo. ¡No la dejes en programas productivos!"],
+            ["Botón Depurar", "En el editor, ejecuta el programa deteniéndose en la primera instrucción."],
+          ]),
+        ],
+        check: () => !!store.data.debugUsed,
+        hint: "Detén un programa en el depurador.",
+      },
+      {
         id: "p3s3",
         title: "Conoce las tablas estándar (SE16)",
         body: [

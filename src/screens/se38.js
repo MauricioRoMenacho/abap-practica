@@ -3,6 +3,7 @@ import { store } from "../store.js";
 import { runProgram } from "./run.js";
 import { preprocess } from "../engine/preprocess.js";
 import { expandIncludes, collectIncludes } from "../engine/includes.js";
+import { toggleBreakpoint } from "./debugger.js";
 
 export function validProgName(n) {
   if (!n) return "Indique un nombre de programa";
@@ -355,7 +356,8 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     return true;
   };
 
-  const execute = async () => {
+  const execute = async (debugMode) => {
+    const runOpts = typeof debugMode === "string" ? { debug: debugMode } : {};
     if (mode === "change") save(true);
     if (isInc()) {
       const mains = store.mainProgramsOf(n);
@@ -364,7 +366,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       if (!r) return;
       const ip = prog();
       if (ip.activeSource !== ip.source && !(await activate())) return;
-      return runOrMain(app, mains[0], { onSyntax: (errors) => showErrors(errors) });
+      return runOrMain(app, mains[0], { ...runOpts, onSyntax: (errors) => showErrors(errors) });
     }
     const p = prog();
     const incs = [...collectIncludes(p.source, (x) => (store.isInclude(x) ? store.program(x).source : null))];
@@ -390,6 +392,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     }
     await app.busy(`Generando programa ${n}...`, async () => {}, 300);
     runProgram(app, n, {
+      ...runOpts,
       onSyntax: (errors) => showErrors(errors),
     });
   };
@@ -447,7 +450,8 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       "-",
       { icon: "check", label: "Verificar", key: "Ctrl+F2", action: doCheck },
       { icon: "activate", label: "Activar", key: "Ctrl+F3", action: activate },
-      { icon: "exec", label: "Ejecutar", key: "F8", action: execute, primary: true },
+      { icon: "exec", label: "Ejecutar", key: "F8", action: () => execute(), primary: true },
+      { icon: "debug", label: "Depurar", tip: "Ejecutar en el depurador, deteniéndose en la primera instrucción", action: () => execute("step") },
       "-",
       { icon: "pretty", label: "Pretty Printer", key: "Shift+F1", action: pretty, disabled: mode !== "change" },
       { icon: "text", label: "Elementos de texto", action: () => { const target = isInc() ? store.mainProgramsOf(n)[0] : n; if (!target) return app.status("Los elementos de texto pertenecen al programa principal: incluya primero este include en un programa", "W"); app.push(textElementsScreen(app, target, mode)); } },
@@ -461,6 +465,29 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       import("../editor.js").then(({ createEditor }) => {
         editor = createEditor(host, prog().source, mode !== "change");
         editor.onDidChangeModelContent(() => updateHeader());
+        // puntos de parada: clic en el margen izquierdo (como en SE38)
+        import("../editor.js").then(({ monaco }) => {
+          const deco = editor.createDecorationsCollection([]);
+          const paint = () => {
+            const bps = store.data.breakpoints || {};
+            deco.set(
+              Object.keys(bps)
+                .filter((k) => k.startsWith(n + ":"))
+                .map((k) => Number(k.split(":")[1]))
+                .map((line) => ({ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: false, glyphMarginClassName: "bp-glyph", glyphMarginHoverMessage: { value: "Punto de parada" } } })),
+            );
+          };
+          paint();
+          editor.onMouseDown((e) => {
+            const T = monaco.editor.MouseTargetType;
+            if (e.target.type !== T.GUTTER_GLYPH_MARGIN && e.target.type !== T.GUTTER_LINE_NUMBERS) return;
+            const line = e.target.position?.lineNumber;
+            if (!line) return;
+            const on = toggleBreakpoint(n, line);
+            paint();
+            app.status(on ? `Punto de parada en la línea ${line}: al ejecutar, el programa se detendrá ahí` : `Punto de parada de la línea ${line} borrado`, "S");
+          });
+        });
         // navegación: doble clic sobre el nombre de un INCLUDE lo abre (o lo crea)
         editor.onMouseDown((e) => {
           if (e.event.browserEvent.detail !== 2 || !e.target.position) return;
