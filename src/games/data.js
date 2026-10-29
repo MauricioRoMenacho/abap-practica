@@ -10,11 +10,11 @@ export const GAME_TYPES = [
 
 export const LEVELS = [
   [0, "Aprendiz"],
-  [50, "Practicante"],
-  [120, "Programador junior"],
-  [220, "Programador semi senior"],
-  [350, "Programador senior"],
-  [470, "Arquitecto ABAP"],
+  [60, "Practicante"],
+  [160, "Programador junior"],
+  [300, "Programador semi senior"],
+  [460, "Programador senior"],
+  [620, "Arquitecto ABAP"],
 ];
 
 const sql = (engine, q) => {
@@ -680,6 +680,191 @@ ENDIF.`,
   },
 ];
 
+// ---------------------------------------------------------------- "Hazlo tú" de las guías
+GAMES.push(
+  {
+    id: "h101",
+    type: "code",
+    guide: "p1",
+    level: "Básico",
+    title: "Hazlo tú: tarjeta de presentación",
+    text: "Sin copiar código: crea un programa que declare una variable con el nombre <b>Rosa</b> y otra con la edad <b>30</b>. Debe escribir <code>Rosa tiene 30 años</code> y, en la línea siguiente, <code>Mayor de edad</code> solo si la edad es 18 o más.",
+    starter: `REPORT zjuego.
+
+`,
+    expected: () => ["Rosa tiene 30 años", "Mayor de edad"],
+    mustContain: [["\\bDATA\\b", "Declara las variables con DATA."], ["\\bIF\\b", "Usa un IF para decidir si es mayor de edad."]],
+    hint: "Dos DATA (TYPE string y TYPE i), un WRITE con un string template |{ ... } tiene { ... } años| y un IF lv_edad >= 18.",
+    solution: `REPORT zjuego.
+
+DATA lv_nombre TYPE string VALUE 'Rosa'.
+DATA lv_edad TYPE i VALUE 30.
+
+WRITE / |{ lv_nombre } tiene { lv_edad } años|.
+IF lv_edad >= 18.
+  WRITE / 'Mayor de edad'.
+ENDIF.`,
+  },
+  {
+    id: "h102",
+    type: "code",
+    guide: "p1",
+    level: "Básico",
+    title: "Hazlo tú: alumnos aprobados",
+    text: "Usa tu tabla <b>ZALUMNOS</b> (ejercicios 7 y 8 del Paso 1). Escribe un programa que cuente cuántos alumnos tienen nota 11 o más y escriba <code>Aprobados: N</code>.",
+    starter: `REPORT zjuego.
+
+`,
+    expected: (engine) => {
+      const r = sql(engine, `SELECT COUNT(*) AS c FROM "zalumnos" WHERE "nota" >= 11`)[0];
+      return r ? [`Aprobados: ${r.c}`] : ["(primero crea y activa la tabla ZALUMNOS en SE11)"];
+    },
+    mustContain: [["\\bSELECT\\b[\\s\\S]*\\bzalumnos\\b", "Lee la tabla ZALUMNOS con SELECT."]],
+    hint: "SELECT * FROM zalumnos INTO TABLE @DATA(lt) WHERE nota >= 11. y luego lines( lt ). También vale SELECT COUNT(*).",
+    solution: `REPORT zjuego.
+
+SELECT * FROM zalumnos INTO TABLE @DATA(lt_alumnos)
+  WHERE nota >= 11.
+
+WRITE |Aprobados: { lines( lt_alumnos ) }|.`,
+  },
+  {
+    id: "h201",
+    type: "code",
+    guide: "p2",
+    level: "Intermedio",
+    title: "Hazlo tú: ALV de conexiones",
+    text: "Sin copiar código: muestra en un ALV las conexiones (tabla <b>SPFLI</b>) de la aerolínea <b>LA</b>, con la barra de pulsadores completa y el título <code>Conexiones LATAM</code>.",
+    starter: `REPORT zjuego.
+
+`,
+    expectedText: (engine) => {
+      const r = sql(engine, `SELECT COUNT(*) AS c FROM "spfli" WHERE "carrid" = 'LA'`)[0];
+      return `Un ALV con ${r?.c ?? "?"} línea(s), todas las funciones y el título "Conexiones LATAM"`;
+    },
+    check: (res, engine) => {
+      const n = sql(engine, `SELECT COUNT(*) AS c FROM "spfli" WHERE "carrid" = 'LA'`)[0]?.c;
+      const a = res.alvs?.[0];
+      if (!a) return { ok: false, msg: "Tu programa no mostró ningún ALV (falta display( ))." };
+      if (a.rows !== n) return { ok: false, msg: `El ALV tiene ${a.rows} línea(s); deberían ser ${n} (solo CARRID = 'LA').` };
+      if (!a.allFunctions) return { ok: false, msg: "Falta activar todas las funciones: get_functions( )->set_all( abap_true )." };
+      if (!/latam/i.test(a.header || "")) return { ok: false, msg: "Falta el título: get_display_settings( )->set_list_header( 'Conexiones LATAM' )." };
+      return { ok: true };
+    },
+    hint: "SELECT de SPFLI con WHERE carrid = 'LA', luego cl_salv_table=>factory, set_all, set_list_header y display.",
+    solution: `REPORT zjuego.
+
+SELECT * FROM spfli INTO TABLE @DATA(lt_conexiones)
+  WHERE carrid = 'LA'.
+
+TRY.
+    cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_alv)
+                            CHANGING  t_table      = lt_conexiones ).
+    lo_alv->get_functions( )->set_all( abap_true ).
+    lo_alv->get_display_settings( )->set_list_header( 'Conexiones LATAM' ).
+    lo_alv->display( ).
+  CATCH cx_salv_msg.
+ENDTRY.`,
+  },
+  {
+    id: "h301",
+    type: "code",
+    guide: "p3",
+    level: "Intermedio",
+    title: "Hazlo tú: reservas por clase",
+    text: "Sin copiar código: con la tabla <b>SBOOK</b>, escribe cuántas reservas hay por clase de vuelo (campo CLASS), ordenadas por clase: una línea por clase, por ejemplo <code>C 45</code>.",
+    starter: `REPORT zjuego.
+
+`,
+    expected: (engine) => sql(engine, `SELECT "class" AS k, COUNT(*) AS c FROM "sbook" GROUP BY "class" ORDER BY "class"`).map((r) => `${String(r.k).trim()} ${r.c}`),
+    hint: "Usa una estructura con CLASS y un contador, COLLECT dentro de un LOOP y SORT al final.",
+    solution: `REPORT zjuego.
+
+TYPES: BEGIN OF ty_clase,
+         class    TYPE sbook-class,
+         cantidad TYPE i,
+       END OF ty_clase.
+DATA lt_clases TYPE STANDARD TABLE OF ty_clase WITH DEFAULT KEY.
+
+SELECT * FROM sbook INTO TABLE @DATA(lt_reservas).
+LOOP AT lt_reservas INTO DATA(ls_reserva).
+  COLLECT VALUE ty_clase( class = ls_reserva-class cantidad = 1 ) INTO lt_clases.
+ENDLOOP.
+SORT lt_clases BY class.
+LOOP AT lt_clases INTO DATA(ls_clase).
+  WRITE: / ls_clase-class, ls_clase-cantidad.
+ENDLOOP.`,
+  },
+  {
+    id: "h302",
+    type: "code",
+    guide: "p3",
+    level: "Avanzado",
+    title: "Hazlo tú: el cliente que más compra",
+    text: "Con <b>VBAK</b> y <b>KNA1</b>: suma el valor neto (NETWR) de los pedidos de cada cliente de la sociedad 1000 (BUKRS_VF) y escribe solo el <b>nombre</b> del cliente con el mayor total.",
+    starter: `REPORT zjuego.
+
+`,
+    expected: (engine) => {
+      const r = sql(engine, `SELECT k."name1" AS n, SUM(a."netwr") AS t FROM "vbak" a JOIN "kna1" k ON k."kunnr" = a."kunnr" WHERE a."bukrs_vf" = '1000' GROUP BY k."name1" ORDER BY t DESC LIMIT 1`)[0];
+      return r ? [String(r.n).trim()] : [];
+    },
+    hint: "Lee VBAK de la sociedad 1000, acumula por KUNNR con COLLECT, ordena por total DESCENDING, toma la línea 1 y busca su nombre en KNA1 (SELECT SINGLE o READ TABLE).",
+    solution: `REPORT zjuego.
+
+TYPES: BEGIN OF ty_total,
+         kunnr TYPE vbak-kunnr,
+         netwr TYPE vbak-netwr,
+       END OF ty_total.
+DATA lt_totales TYPE STANDARD TABLE OF ty_total WITH DEFAULT KEY.
+
+SELECT * FROM vbak INTO TABLE @DATA(lt_pedidos) WHERE bukrs_vf = '1000'.
+LOOP AT lt_pedidos INTO DATA(ls_pedido).
+  COLLECT VALUE ty_total( kunnr = ls_pedido-kunnr netwr = ls_pedido-netwr ) INTO lt_totales.
+ENDLOOP.
+SORT lt_totales BY netwr DESCENDING.
+
+READ TABLE lt_totales INTO DATA(ls_mayor) INDEX 1.
+SELECT SINGLE name1 FROM kna1 INTO @DATA(lv_nombre) WHERE kunnr = @ls_mayor-kunnr.
+WRITE lv_nombre.`,
+  },
+  {
+    id: "h401",
+    type: "code",
+    guide: "p4",
+    level: "Intermedio",
+    title: "Hazlo tú: clase calculadora",
+    text: "Crea una clase local <code>lcl_calculadora</code> con dos métodos, <code>sumar</code> y <code>multiplicar</code>, que reciban dos enteros y devuelvan el resultado (RETURNING). Úsala con 10 y 5 y escribe <code>Suma: 15</code> y <code>Producto: 50</code>.",
+    starter: `REPORT zjuego.
+
+`,
+    expected: () => ["Suma: 15", "Producto: 50"],
+    mustContain: [["CLASS\\s+lcl_calculadora\\s+DEFINITION", "Define la clase lcl_calculadora."], ["RETURNING", "Los métodos deben devolver el resultado con RETURNING."]],
+    hint: "METHODS sumar IMPORTING iv_a TYPE i iv_b TYPE i RETURNING VALUE(rv) TYPE i. Después: DATA(lo) = NEW lcl_calculadora( ).",
+    solution: `REPORT zjuego.
+
+CLASS lcl_calculadora DEFINITION.
+  PUBLIC SECTION.
+    METHODS sumar IMPORTING iv_a TYPE i iv_b TYPE i RETURNING VALUE(rv) TYPE i.
+    METHODS multiplicar IMPORTING iv_a TYPE i iv_b TYPE i RETURNING VALUE(rv) TYPE i.
+ENDCLASS.
+
+CLASS lcl_calculadora IMPLEMENTATION.
+  METHOD sumar.
+    rv = iv_a + iv_b.
+  ENDMETHOD.
+  METHOD multiplicar.
+    rv = iv_a * iv_b.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  DATA(lo_calc) = NEW lcl_calculadora( ).
+  WRITE / |Suma: { lo_calc->sumar( iv_a = 10 iv_b = 5 ) }|.
+  WRITE / |Producto: { lo_calc->multiplicar( iv_a = 10 iv_b = 5 ) }|.`,
+  },
+);
+
 // ---------------------------------------------------------------- utilidades
 export function parseFill(code) {
   const parts = [];
@@ -730,5 +915,7 @@ export function levelFor(points) {
   }
   return { name, next };
 }
+
+export const gameById = (id) => GAMES.find((g) => g.id === id);
 
 export const MAX_POINTS = GAMES.reduce((a, g) => a + GAME_TYPES.find((t) => t.id === g.type).points, 0);

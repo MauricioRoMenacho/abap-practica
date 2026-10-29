@@ -1400,6 +1400,37 @@ START-OF-SELECTION.
   },
 ];
 
+// ---- "Hazlo tú": ejercicios sin código para copiar al final de cada paso ----
+const practice = (id) => ({ practice: id });
+const gameDone = (id) => !!store.data.games?.[id]?.done;
+const HAZLO_TU = {
+  p1: ["h101", "h102"],
+  p2: ["h201"],
+  p3: ["h301", "h302"],
+  p4: ["h401"],
+};
+for (const [gid, ids] of Object.entries(HAZLO_TU)) {
+  const g = GUIDES.find((x) => x.id === gid);
+  if (!g) continue;
+  g.steps.push({
+    id: gid + "_hazlo",
+    title: "Hazlo tú: demuestra lo aprendido",
+    body: [
+      "Hasta ahora has copiado el código de la guía. Ahora te toca a ti: resuelve estos ejercicios <b>sin código para copiar</b>. Se corrigen solos al ejecutar tu programa y comparar su resultado con el esperado.",
+      ...ids.map(practice),
+      "Si te atascas, cada ejercicio tiene <b>Pista</b>. Ver la solución completa no suma puntos en Retos y juegos (ZJUEGOS).",
+    ],
+    check: () => ids.every(gameDone),
+    hint: "Resuelve los ejercicios de esta sección.",
+  });
+}
+
+export async function openGame(app, id) {
+  const [{ gameScreen }, { gameById }] = await Promise.all([import("./screens/games.js"), import("./games/data.js")]);
+  const g = gameById(id);
+  if (g) app.push(gameScreen(app, g));
+}
+
 export function guidePanel(app, host) {
   let current = localStorage.getItem("abapp.guideTab") || "p1";
   // el ejercicio abierto y la posición de scroll se recuerdan al recargar
@@ -1437,6 +1468,35 @@ export function guidePanel(app, host) {
     return out;
   };
   let lastDone = null;
+
+  const practiceCard = (id) => {
+    const card = h("div", { class: "practice-card" });
+    import("./games/data.js").then(({ gameById }) => {
+      const g = gameById(id);
+      if (!g) return;
+      const done = gameDone(id);
+      card.classList.toggle("done", done);
+      card.replaceChildren(
+        h("div", { class: "pc-head" }, h("span", { class: "ico ico-" + (done ? "ok" : "editor") }), h("b", {}, g.title.replace(/^Hazlo tú: /, "")), done ? h("span", { class: "badge badge-ok" }, "Resuelto") : null),
+        h("div", { class: "pc-text", html: g.text }),
+        h(
+          "button",
+          {
+            class: "btn " + (done ? "" : "btn-primary"),
+            onclick: () => {
+              if (app.engine) return openGame(app, id);
+              if (window.opener && window.opener.__openGame) {
+                window.opener.__openGame(id);
+                window.opener.focus();
+              } else alert("Abre este ejercicio desde la ventana del sistema.");
+            },
+          },
+          done ? "Volver a abrir" : "Resolver ejercicio",
+        ),
+      );
+    });
+    return card;
+  };
 
   const render = () => {
     const d = done();
@@ -1539,7 +1599,9 @@ export function guidePanel(app, host) {
                     s.body.map((b) =>
                       typeof b === "string"
                         ? h("div", { class: "g-p", html: b })
-                        : b.syntax
+                        : b.practice
+                          ? practiceCard(b.practice)
+                          : b.syntax
                           ? h(
                               "details",
                               { class: "g-syntax", open: true },

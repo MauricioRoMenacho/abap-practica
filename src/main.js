@@ -5,7 +5,7 @@ import "./style.css";
 globalThis.Buffer = globalThis.Buffer || Buffer;
 import { App } from "./app.js";
 import { store } from "./store.js";
-import { guidePanel } from "./guides.js";
+import { guidePanel, openGame } from "./guides.js";
 import { homeScreen } from "./screens/home.js";
 import { se38Screen } from "./screens/se38.js";
 import { se11Screen } from "./screens/se11.js";
@@ -58,6 +58,7 @@ async function boot() {
   const app = new App(root, { transactions, guide: guidePanel });
   app.engine = engine;
   window.__app = app;
+  window.__openGame = (id) => openGame(app, id);
   app.guide.render();
   app.home();
   const hash = location.hash.replace("#", "").toUpperCase();

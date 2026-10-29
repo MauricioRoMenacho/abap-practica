@@ -2511,3 +2511,32 @@ body.guide-window {
   border-bottom-color: #e0a800;
   box-shadow: 0 0 0 3px rgba(224, 168, 0, 0.25);
 }
+
+/* ejercicios "Hazlo tú" en la guía */
+.practice-card {
+  border: 1px solid #c9dff4;
+  background: #f5f9fd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  display: grid;
+  gap: 6px;
+}
+.practice-card.done {
+  border-color: #b8dfc4;
+  background: #f1faf4;
+}
+.pc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pc-head .ico-ok {
+  --ic: var(--ok);
+}
+.pc-text {
+  font-size: 13px;
+}
+.practice-card .btn {
+  justify-self: start;
+}

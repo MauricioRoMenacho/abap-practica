@@ -36,14 +36,18 @@ async function runCode(app, source) {
     decimalNotation: store.data.settings.decimalNotation,
   };
   const popups = [];
+  const alvs = [];
   const ui = {
     status: (t, ty) => popups.push({ type: ty, text: t }),
     popup: async (t) => popups.push({ type: "I", text: t }),
-    alv: async (snap) => popups.push({ type: "ALV", text: `ALV con ${snap.rows.length} línea(s)` }),
+    alv: async (snap) => {
+      alvs.push({ rows: snap.rows.length, allFunctions: snap.allFunctions, defaultFunctions: snap.defaultFunctions, header: snap.header, columns: snap.columns.map((c) => c.name) });
+      popups.push({ type: "ALV", text: `ALV con ${snap.rows.length} línea(s)` });
+    },
     selectionScreen: async (meta, values) => values,
   };
   const res = await app.engine.run({ name: "ZJUEGO", source }, ctx, ui);
-  return { ...res, popups };
+  return { ...res, popups, alvs };
 }
 
 function codeBlock(code) {
@@ -99,8 +103,8 @@ export function gamesScreen(app) {
             ),
           ),
           h("p", { class: "hint" }, "Los puntos completos se ganan resolviendo al primer intento; con más intentos ganas la mitad, y si ves la solución no suma puntos."),
-          GAME_TYPES.map((t) => {
-            const list = GAMES.filter((g) => g.type === t.id);
+          [...GAME_TYPES, { id: "guide", title: "Hazlo tú (de las guías)", desc: "Los ejercicios sin código para copiar que cierran cada paso de la guía.", icon: "guide", points: 30 }].map((t) => {
+            const list = t.id === "guide" ? GAMES.filter((g) => g.guide) : GAMES.filter((g) => g.type === t.id && !g.guide);
             const d = list.filter((g) => progress()[g.id]?.done).length;
             return h(
               "section",
@@ -134,7 +138,7 @@ function nextGame(g) {
   return GAMES.slice(i + 1).find((x) => !progress()[x.id]?.done) || GAMES.slice(0, i).find((x) => !progress()[x.id]?.done) || null;
 }
 
-function gameScreen(app, g) {
+export function gameScreen(app, g) {
   const t = typeOf(g);
   let resultEl;
   let editor = null;
@@ -296,8 +300,9 @@ function gameScreen(app, g) {
       // corregir o programar: editor + ejecución
       const draft = progress()[g.id]?.draft;
       const initial = draft ?? (g.type === "fix" ? g.code : g.starter);
-      const expected = typeof g.expected === "function" ? g.expected(app.engine) : g.expected;
-      el.append(h("div", { class: "oc-title" }, "Salida esperada"), h("pre", { class: "list-out small-list expected" }, expected.join("\n")));
+      const expected = g.expected ? (typeof g.expected === "function" ? g.expected(app.engine) : g.expected) : null;
+      if (expected) el.append(h("div", { class: "oc-title" }, "Salida esperada"), h("pre", { class: "list-out small-list expected" }, expected.join("\n")));
+      else if (g.expectedText) el.append(h("div", { class: "oc-title" }, "Resultado esperado"), h("div", { class: "list-out small-list expected" }, typeof g.expectedText === "function" ? g.expectedText(app.engine) : g.expectedText));
       const host = h("div", { class: "game-editor" });
       el.append(host);
       import("../editor.js").then(({ createEditor }) => {
@@ -329,6 +334,14 @@ function gameScreen(app, g) {
         const { setMarkers } = await import("../editor.js");
         setMarkers(editor, []);
         if (r.status === "dump") return failure("Error en tiempo de ejecución: " + r.dump.error, h("p", {}, r.dump.title + ". " + r.dump.text));
+        for (const [re, msg] of g.mustContain || []) {
+          if (!new RegExp(re, "i").test(src)) return failure("Aún no cumple el enunciado", h("p", {}, msg));
+        }
+        if (g.check) {
+          const c = g.check(r, app.engine);
+          if (c.ok) return success(award(g, tries === 1, usedSolution));
+          return failure("Aún no está bien", h("p", {}, c.msg));
+        }
         const cmp = compareOutput(r.list || [], expected);
         if (cmp.ok) {
           const pts = award(g, tries === 1, usedSolution);
