@@ -1515,16 +1515,42 @@ table.alv tr.clickable {
   flex: none;
 }
 .guide-host.open {
-  width: 410px;
+  width: var(--guide-w, 440px);
+}
+.guide-host.resizing {
+  transition: none;
+  user-select: none;
+}
+.guide-host {
+  position: relative;
+}
+.guide-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+}
+.guide-resizer:hover,
+.guide-host.resizing .guide-resizer {
+  background: rgba(10, 110, 209, 0.25);
 }
 .guide {
-  width: 410px;
+  width: 100%;
   height: 100%;
   overflow: auto;
   display: flex;
   flex-direction: column;
 }
 .guide-top {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #fff;
+  padding-bottom: 6px !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2627,3 +2653,4 @@ body.guide-window {
 .cert-req li.ok { color: #1e6b33; font-weight: 600; }
 .guide-top { min-width: 0; }
 .btn:disabled { opacity: 0.5; cursor: default; }
+.guide-inner { height: 100%; }

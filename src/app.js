@@ -138,12 +138,50 @@ export class App {
       ),
     );
     this.updateStatusInfo();
-    this.guide = this.guideFactory(this, this.guideHost);
+    this.guideInner = h("div", { class: "guide-inner" });
+    this.guideHost.append(this.guideInner);
+    this.guide = this.guideFactory(this, this.guideInner);
+    this.setupGuideResizer();
     const open = localStorage.getItem("abapp.guideOpen");
     if (open !== "0") this.guideHost.classList.add("open");
   }
 
-  toggleGuide(force) {
+// ancho de la guía: se arrastra el borde izquierdo (doble clic = ancho por defecto)
+  setupGuideResizer() {
+    const host = this.guideHost;
+    const root = document.documentElement;
+    const clamp = (w) => Math.max(300, Math.min(w, Math.max(320, window.innerWidth - 420)));
+    const apply = (w) => root.style.setProperty("--guide-w", clamp(w) + "px");
+    const saved = Number(localStorage.getItem("abapp.guideW"));
+    if (saved) apply(saved);
+    const handle = h("div", { class: "guide-resizer", title: "Arrastre para cambiar el ancho de la guía (doble clic: ancho normal)" });
+    host.prepend(handle);
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      host.classList.add("resizing");
+      const right = host.getBoundingClientRect().right;
+      const move = (ev) => apply(right - ev.clientX);
+      const up = () => {
+        host.classList.remove("resizing");
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        localStorage.setItem("abapp.guideW", String(parseInt(getComputedStyle(root).getPropertyValue("--guide-w"), 10)));
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+    });
+    handle.addEventListener("dblclick", () => {
+      root.style.removeProperty("--guide-w");
+      localStorage.removeItem("abapp.guideW");
+    });
+    window.addEventListener("resize", () => {
+      const w = Number(localStorage.getItem("abapp.guideW"));
+      if (w) apply(w);
+    });
+  }
+
+    toggleGuide(force) {
     const open = force ?? !this.guideHost.classList.contains("open");
     this.guideHost.classList.toggle("open", open);
     localStorage.setItem("abapp.guideOpen", open ? "1" : "0");
