@@ -68,7 +68,7 @@ export function tableToXml(def) {
 <abapGit version="v1.0.0" serializer="LCL_OBJECT_TABL" serializer_version="v1.0.0">
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
-   <DD02V><TABNAME>${esc(def.name.toUpperCase())}</TABNAME><DDLANGUAGE>S</DDLANGUAGE><TABCLASS>TRANSP</TABCLASS>${clidep}<DDTEXT>${esc(def.description)}</DDTEXT><CONTFLAG>${def.deliveryClass || "A"}</CONTFLAG></DD02V>
+   <DD02V><TABNAME>${esc(def.name.toUpperCase())}</TABNAME><DDLANGUAGE>S</DDLANGUAGE><TABCLASS>${def.tabclass || "TRANSP"}</TABCLASS>${def.tabclass === "INTTAB" ? "" : clidep}<DDTEXT>${esc(def.description)}</DDTEXT><CONTFLAG>${def.deliveryClass || "A"}</CONTFLAG></DD02V>
    <DD03P_TABLE>
 ${fields}
    </DD03P_TABLE>

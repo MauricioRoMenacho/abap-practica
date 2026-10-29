@@ -57,8 +57,10 @@ function translateIssue(msg) {
 }
 
 export class Engine {
-  constructor({ libFiles, createDbClient, onDbChange }) {
+  constructor({ libFiles, createDbClient, onDbChange, locks, onLocksChange }) {
     this.libFiles = libFiles; // [{filename, contents}]
+    this.locks = locks || []; // bloqueos (SM12)
+    this.onLocksChange = onLocksChange;
     this.createDbClient = createDbClient;
     this.onDbChange = onDbChange;
     this.db = null;
@@ -237,6 +239,23 @@ export class Engine {
     const all = [...exp.errors.map((e) => ({ key: "include", endRow: e.row, ...e })), ...mapped];
     all.sort((a, b) => (a.obj === b.obj ? a.row - b.row : a.obj === main ? -1 : b.obj === main ? 1 : a.obj.localeCompare(b.obj)));
     return { errors: all, reg, pp, progFile };
+  }
+
+  // verifica un objeto adicional (p. ej. un módulo de función): errores del archivo indicado
+  checkFile(filename, ctx) {
+    const { reg } = this.buildRegistry({ name: "ZZ_CHECK_FM", source: "REPORT zz_check_fm." }, ctx);
+    const errors = [];
+    const seen = new Set();
+    for (const i of reg.findIssues()) {
+      if (i.getFilename() !== filename) continue;
+      if (i.getKey() === "unknown_types" && /contains unknown: (any|data)/i.test(i.getMessage())) continue;
+      const e = { row: i.getStart().getRow(), col: i.getStart().getCol(), endRow: i.getEnd().getRow(), endCol: i.getEnd().getCol(), key: i.getKey(), message: translateIssue(i.getMessage()) };
+      const k = e.row + ":" + e.message;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      errors.push(e);
+    }
+    return errors.sort((a, b) => a.row - b.row);
   }
 
   // ¿hay que instrumentar para depurar? (BREAK-POINT, puntos de parada o depuración pedida)
@@ -486,6 +505,51 @@ export class Engine {
       if (forms.top) await forms.top();
     };
 
+    // ---- módulos de función estándar con interacción ----
+    globalThis.__abapPopupConfirm = async (o) => {
+      const t = (x) => String(x || "").trim();
+      pauseClock();
+      const r = ui.confirm ? await ui.confirm({ titlebar: t(o.titlebar), text: t(o.text), b1: t(o.b1) || "Sí", b2: t(o.b2) || "No", cancel: t(o.cancel) !== "" }) : "1";
+      resumeClock();
+      return r || "A";
+    };
+    const user = String(abap.builtin.sy.get().uname.get()).trim() || "ALUMNO";
+    const ownLocks = [];
+    globalThis.__abapEnqueue = (tab, key) => {
+      tab = String(tab).trim().toUpperCase();
+      key = String(key || "").trim();
+      const hit = this.locks.find((l) => l.table === tab && (l.key === key || l.key === "" || key === "") && l.user !== user);
+      if (hit) return hit.user;
+      if (!this.locks.some((l) => l.table === tab && l.key === key && l.user === user)) {
+        const l = { table: tab, key, user, program: program.name, time: new Date().toISOString(), mode: "E" };
+        this.locks.push(l);
+        ownLocks.push(l);
+        this.onLocksChange?.(this.locks);
+      }
+      return "";
+    };
+    globalThis.__abapDequeue = (tab, key) => {
+      tab = String(tab).trim().toUpperCase();
+      key = String(key || "").trim();
+      const before = this.locks.length;
+      this.locks = this.locks.filter((l) => !(l.user === user && l.table === tab && (key === "" || l.key === key)));
+      if (this.locks.length !== before) this.onLocksChange?.(this.locks);
+    };
+    globalThis.__abapFileRead = async (name) => {
+      pauseClock();
+      const r = ui.fileRead ? await ui.fileRead(String(name).trim()) : null;
+      resumeClock();
+      return r;
+    };
+    globalThis.__abapFileWrite = (name, lines) => {
+      ui.fileWrite?.(String(name).trim(), lines);
+    };
+    this.__releaseOwnLocks = () => {
+      if (!ownLocks.length) return;
+      this.locks = this.locks.filter((l) => !ownLocks.includes(l));
+      this.onLocksChange?.(this.locks);
+    };
+
     // ---- depurador ----
     if (debugging && comp.dbgTable) {
       const table = comp.dbgTable;
@@ -554,6 +618,7 @@ export class Engine {
       else if (e instanceof AbapMessageStop) result = { status: "message", type: e.msgType, text: e.message, displayLike: e.displayLike };
       else result = { status: "dump", dump: await describeDump(e, abap, comp.unsupported) };
     }
+    this.__releaseOwnLocks?.();
     try {
       await this.db.commit?.();
     } catch {

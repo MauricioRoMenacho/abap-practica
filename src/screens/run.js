@@ -11,7 +11,8 @@ const selMemory = {};
 
 export async function runProgram(app, name, opts = {}) {
   const { ctxFor, editorScreen } = await import("./se38.js");
-  const p = store.program(name);
+  // opts.virtual: programa generado (p. ej. entorno de prueba de SE37), no se graba en el repositorio
+  const p = opts.virtual || store.program(name);
   if (!p) return app.status(`El programa ${name} no existe`, "E");
   if (p.activeSource === null) return app.status(`El programa ${name} no está activo. Actívelo primero (Ctrl+F3)`, "E");
   const ctx = ctxFor(name);
@@ -76,6 +77,46 @@ export async function runProgram(app, name, opts = {}) {
           opts.pendingMsg = null;
         }
       }),
+    confirm: (o) =>
+      dialog({
+        title: o.titlebar || "Confirmación",
+        body: o.text,
+        icon: "question",
+        buttons: [
+          { label: o.b1, value: "1", primary: true },
+          { label: o.b2, value: "2" },
+          ...(o.cancel ? [{ label: "Cancelar", value: "A" }] : []),
+        ],
+      }).then((v) => v || "A"),
+    fileRead: (fname) => {
+      let lines = null;
+      const info = h("div", { class: "muted" }, "Ningún archivo seleccionado.");
+      const inp = h("input", {
+        type: "file",
+        accept: ".txt,.csv,.tsv,.dat,text/plain",
+        onchange: async () => {
+          const f = inp.files[0];
+          if (!f) return;
+          const txt = await f.text();
+          lines = txt.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+          info.textContent = `${f.name}: ${lines.length} línea(s) leídas.`;
+        },
+      });
+      const body = h(
+        "div",
+        { class: "file-dlg" },
+        h("p", {}, `El programa quiere leer el archivo "${fname}" (GUI_UPLOAD).`),
+        h("p", { class: "muted" }, "En el navegador no se puede leer una ruta del disco directamente: elige aquí el archivo de tu PC. Se lee como texto, una línea por fila."),
+        inp,
+        info,
+      );
+      return dialog({ title: "Cargar archivo del PC", body, buttons: [{ label: "Cargar", primary: true, value: () => lines || false, keepOpen: true }, { label: "Cancelar", value: null }] }).then((v) => v || null);
+    },
+    fileWrite: (fname, lines) => {
+      const base = fname.split(/[\\/]/).pop() || "archivo.txt";
+      download(base, lines.join("\r\n"));
+      app.status(`Archivo ${base} descargado (${lines.length} líneas transferidas)`, "S");
+    },
     alv: (snap) =>
       new Promise((resolve) => {
         runRecord.alvs.push(summarizeAlv(snap));
@@ -96,7 +137,7 @@ export async function runProgram(app, name, opts = {}) {
     if (app.statusMsg.classList.contains("st-busy")) app.status("");
   };
   // la barra de progreso se detiene mientras el programa espera al usuario
-  for (const k of ["selectionScreen", "alv", "popup"]) {
+  for (const k of ["selectionScreen", "alv", "popup", "confirm", "fileRead"]) {
     const orig = ui[k];
     ui[k] = (...a) => {
       stopBusy();
@@ -115,7 +156,7 @@ export async function runProgram(app, name, opts = {}) {
   runRecord.status = res.status;
   runRecord.listLines = res.list?.length || 0;
   runRecord.hadScreen = res.hadScreen;
-  if (res.status !== "syntax" && res.status !== "cancel") {
+  if (res.status !== "syntax" && res.status !== "cancel" && !opts.virtual) {
     store.data.runs[name] = runRecord;
     store.save();
   }
@@ -138,6 +179,7 @@ export async function runProgram(app, name, opts = {}) {
     case "syntax":
       app.status(`El programa ${name} tiene errores de sintaxis`, "E");
       if (opts.onSyntax) opts.onSyntax(res.errors);
+      else if (opts.virtual) app.status(`Error de sintaxis en ${name}: ${res.errors[0]?.message || ""}`, "E");
       else app.push(editorScreen(app, name, "change", { errors: res.errors }));
       return;
     case "cancel":

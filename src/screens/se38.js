@@ -499,6 +499,23 @@ export function editorScreen(app, n, initialMode, opts = {}) {
           if (pos.column < from || pos.column > from + m[2].length) return;
           setTimeout(() => navigateInclude(m[2].toUpperCase()), 0);
         });
+        // doble clic sobre el nombre de un módulo de función: abre SE37
+        editor.onMouseDown((e) => {
+          if (e.event.browserEvent.detail !== 2 || !e.target.position) return;
+          const pos = e.target.position;
+          const text = editor.getModel().getLineContent(pos.lineNumber);
+          const m = text.match(/^(\s*CALL\s+FUNCTION\s+')([A-Za-z0-9_/]+)'/i);
+          if (!m) return;
+          if (pos.column < m[1].length + 1 || pos.column > m[1].length + 1 + m[2].length) return;
+          setTimeout(async () => {
+            const { openFm } = await import("./se37.js");
+            const { moduleByName } = await import("../fm-repo.js");
+            if (!moduleByName(m[2])) return app.status(`El módulo de función ${m[2].toUpperCase()} no existe. Créelo en SE37.`, "W");
+            if (mode === "change") save(true);
+            store.data.lastFm = m[2].toUpperCase();
+            openFm(app, m[2].toUpperCase());
+          }, 0);
+        });
         if (opts.gotoLine) {
           editor.revealLineInCenter(opts.gotoLine);
           editor.setPosition({ lineNumber: opts.gotoLine, column: 1 });
@@ -597,13 +614,15 @@ export function expandedSource(name) {
 import { STANDARD_TABLES } from "../engine/standard.js";
 import { allMsgClasses, msagXml, msgTexts } from "./se91.js";
 import { allTablesForEngine, ddicExtraFiles } from "../ddic-repo.js";
+import { userFugrFiles } from "../fm-repo.js";
 
 // objetos del repositorio que todo programa puede usar (mensajes, diccionario, funciones...)
-export function repoContext() {
+export function repoContext(fmOverride) {
   const lang = store.data.settings.lang || "S";
   const extraFiles = [];
   for (const mc of Object.values(allMsgClasses())) extraFiles.push({ filename: mc.name.toLowerCase() + ".msag.xml", contents: msagXml(mc) });
   extraFiles.push(...ddicExtraFiles());
+  extraFiles.push(...userFugrFiles(fmOverride));
   return { extraFiles, msgTexts: msgTexts(lang) };
 }
 

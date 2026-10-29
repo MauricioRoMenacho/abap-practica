@@ -1,0 +1,21 @@
+import fs from "fs"; import path from "path";
+import { Engine } from "../src/engine/engine.js";
+import { SQLiteDatabaseClient } from "@abaplint/database-sqlite";
+import { STANDARD_TABLES } from "../src/engine/standard.js";
+import { stdLibFiles } from "../src/engine/stdlib.js";
+import { fugrFiles } from "../src/engine/fugr.js";
+const dir = "src/engine/abaplib";
+const libFiles = fs.readdirSync(dir).map(f => ({ filename: f, contents: fs.readFileSync(path.join(dir, f), "utf8") }));
+const eng = new Engine({ libFiles: [...libFiles, ...stdLibFiles()], createDbClient: () => new SQLiteDatabaseClient() });
+await eng.openDb(); await eng.syncSchema([]);
+const ctx = { tables: Object.values(STANDARD_TABLES), texts: {} };
+for (const f of stdLibFiles().filter(f=>f.filename.endsWith(".abap"))) { const e = eng.checkFile(f.filename, ctx); if (e.length) console.log(f.filename, e); }
+const g = { name: "ZFG_TEST", description: "t", top: "DATA gv_contador TYPE i.", modules: [{ name: "Z_SUMAR", params: { import: [{name:"IV_A",type:"I",byValue:true},{name:"IV_B",type:"I",byValue:true}], export:[{name:"EV_SUMA",type:"I",byValue:true}], exceptions:[{name:"NEGATIVO"}] }, body: "  IF iv_a < 0.\n    RAISE negativo.\n  ENDIF.\n  gv_contador = gv_contador + 1.\n  ev_suma = iv_a + iv_b + undefined_x." }] };
+const files = fugrFiles(g);
+ctx.extraFiles = files;
+console.log(eng.checkFile("zfg_test.fugr.z_sumar.abap", ctx));
+g.modules[0].body = g.modules[0].body.replace(" + undefined_x", "");
+ctx.extraFiles = fugrFiles(g);
+console.log(eng.checkFile("zfg_test.fugr.z_sumar.abap", ctx));
+const r = await eng.run({ name: "ZT", source: "REPORT zt.\nDATA lv TYPE i.\nCALL FUNCTION 'Z_SUMAR' EXPORTING iv_a = 2 iv_b = 3 IMPORTING ev_suma = lv EXCEPTIONS negativo = 1.\nWRITE: / lv, sy-subrc.\nCALL FUNCTION 'Z_SUMAR' EXPORTING iv_a = -2 iv_b = 3 IMPORTING ev_suma = lv EXCEPTIONS negativo = 1.\nWRITE: / lv, sy-subrc." }, ctx, { status(){}, popup: async()=>{}, alv: async()=>{}, selectionScreen: async(m,v)=>v });
+console.log(r.status, r.dump, r.list.join("\n"));

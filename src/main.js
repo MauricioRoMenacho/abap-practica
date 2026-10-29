@@ -13,6 +13,7 @@ import { se16Screen } from "./screens/se16.js";
 import { se84Screen } from "./screens/se84.js";
 import { gamesScreen } from "./screens/games.js";
 import { se91Screen } from "./screens/se91.js";
+import { se37Screen } from "./screens/se37.js";
 
 // guía de práctica sola, en pantalla completa (se abre en otra ventana)
 async function bootGuideWindow() {
@@ -37,8 +38,14 @@ async function boot() {
   const root = document.getElementById("app");
   const [{ Engine }, { SQLiteDatabaseClient }, { libFiles }] = await Promise.all([import("./engine/engine.js"), import("@abaplint/database-sqlite"), import("./engine/lib.js")]);
   const wasmUrl = new URL("sql-wasm.wasm", document.baseURI).href;
+  const { stdLibFiles } = await import("./engine/stdlib.js");
   const engine = new Engine({
-    libFiles,
+    libFiles: [...libFiles, ...stdLibFiles()],
+    locks: store.data.locks || [],
+    onLocksChange: (l) => {
+      store.data.locks = l;
+      store.save();
+    },
     createDbClient: () => new SQLiteDatabaseClient({ sqlJs: { locateFile: () => wasmUrl } }),
     onDbChange: (bytes) => store.saveDb(bytes),
   });
@@ -57,6 +64,7 @@ async function boot() {
     SE80: (app) => se84Screen(app),
     ZJUEGOS: (app) => gamesScreen(app),
     SE91: (app) => se91Screen(app),
+    SE37: (app) => se37Screen(app),
   };
   const app = new App(root, { transactions, guide: guidePanel });
   app.engine = engine;

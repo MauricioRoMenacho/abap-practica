@@ -1,0 +1,13 @@
+import fs from "fs"; import path from "path";
+import { Engine } from "../src/engine/engine.js";
+import { SQLiteDatabaseClient } from "@abaplint/database-sqlite";
+import { STANDARD_TABLES } from "../src/engine/standard.js";
+const dir = "src/engine/abaplib";
+const libFiles = fs.readdirSync(dir).map(f => ({ filename: f, contents: fs.readFileSync(path.join(dir, f), "utf8") }));
+const fdir = process.env.FDIR || "/home/claude/proto/fugr";
+const extra = fs.readdirSync(fdir).map(f => ({ filename: f, contents: fs.readFileSync(path.join(fdir, f), "utf8") }));
+const eng = new Engine({ libFiles, createDbClient: () => new SQLiteDatabaseClient() });
+await eng.openDb(); await eng.syncSchema([]);
+const src = fs.readFileSync(process.argv[2], "utf8");
+const r = await eng.run({ name: "ZT", source: src }, { tables: Object.values(STANDARD_TABLES), extraFiles: extra, texts: {} }, { status: (t)=>console.log("[S]",t), popup: async (t) => console.log("[POPUP]", t), alv: async () => {}, selectionScreen: async (m, v) => v });
+console.log(r.status, JSON.stringify(r.errors || r.dump || ""), "\n" + r.list.join("\n"));
