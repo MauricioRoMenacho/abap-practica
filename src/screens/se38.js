@@ -560,6 +560,7 @@ export function ctxFor(name, mode = "active") {
     user: store.data.settings.user,
     lang: lang === "E" ? "EN" : "ES",
     decimalNotation: store.data.settings.decimalNotation,
+    ...repoContext(),
     // INCLUDE: en ejecución se usa la versión activa; al verificar, la grabada
     resolveInclude: (inc) => {
       const ip = store.program(inc);
@@ -594,6 +595,16 @@ export function expandedSource(name) {
 }
 
 import { STANDARD_TABLES } from "../engine/standard.js";
+import { allMsgClasses, msagXml, msgTexts } from "./se91.js";
+
+// objetos del repositorio que todo programa puede usar (mensajes, diccionario, funciones...)
+export function repoContext() {
+  const lang = store.data.settings.lang || "S";
+  const extraFiles = [];
+  for (const mc of Object.values(allMsgClasses())) extraFiles.push({ filename: mc.name.toLowerCase() + ".msag.xml", contents: msagXml(mc) });
+  return { extraFiles, msgTexts: msgTexts(lang) };
+}
+
 function app_standard() {
   return Object.values(STANDARD_TABLES);
 }

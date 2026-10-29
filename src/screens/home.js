@@ -9,6 +9,9 @@ const TX = [
   ["ZJUEGOS", "Retos y juegos", "Completa código, adivina la salida, corrige errores y gana puntos", "game"],
 ];
 
+// transacciones adicionales (árbol y accesos rápidos)
+export const MORE_TX = [["SE91", "Clases de mensajes"]];
+
 export function homeScreen(app) {
   return {
     id: "HOME",
@@ -28,6 +31,9 @@ export function homeScreen(app) {
             { class: "tree" },
             h("div", { class: "tree-node open" }, h("span", { class: "ico ico-folder" }), "Favoritos"),
             TX.map(([code, name]) =>
+              h("button", { class: "tree-leaf", ondblclick: () => app.command(code), onclick: (e) => e.currentTarget.focus(), onkeydown: (e) => e.key === "Enter" && app.command(code) }, h("span", { class: "ico ico-tx" }), h("b", {}, code), " - " + name),
+            ),
+            MORE_TX.map(([code, name]) =>
               h("button", { class: "tree-leaf", ondblclick: () => app.command(code), onclick: (e) => e.currentTarget.focus(), onkeydown: (e) => e.key === "Enter" && app.command(code) }, h("span", { class: "ico ico-tx" }), h("b", {}, code), " - " + name),
             ),
             h("div", { class: "tree-node open" }, h("span", { class: "ico ico-folder" }), "Menú SAP"),
@@ -53,9 +59,10 @@ export function homeScreen(app) {
                 ),
               ),
             ),
+            h("div", { class: "chips" }, h("span", { class: "muted small" }, "Más transacciones: "), MORE_TX.map(([code, name]) => h("button", { class: "chip", title: name, onclick: () => app.command(code) }, code + " · " + name))),
             h(
               "div",
-              { class: "start-box" },
+              { class: "start-box", style: { marginTop: "16px" } },
               h("div", {}, h("h2", {}, "¿Primera vez?"), h("p", {}, "Abre la ", h("b", {}, "Guía de práctica"), " (botón arriba a la derecha) y sigue el Paso 1. Cada ejercicio se marca solo cuando lo completas.")),
               h("button", { class: "btn btn-primary", onclick: () => app.toggleGuide(true) }, "Abrir la guía"),
             ),

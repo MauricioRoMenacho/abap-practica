@@ -3,6 +3,7 @@ import { h, esc } from "../ui.js";
 import { store } from "../store.js";
 import { GAMES, GAME_TYPES, parseFill, fillSolution, sameAnswer, compareOutput, levelFor, MAX_POINTS } from "../games/data.js";
 import { STANDARD_TABLES } from "../engine/standard.js";
+import { repoContext } from "./se38.js";
 
 const typeOf = (g) => GAME_TYPES.find((t) => t.id === g.type);
 const progress = () => (store.data.games ||= {});
@@ -34,6 +35,7 @@ async function runCode(app, source) {
     user: store.data.settings.user,
     lang: store.data.settings.lang === "E" ? "EN" : "ES",
     decimalNotation: store.data.settings.decimalNotation,
+    ...repoContext(),
   };
   const popups = [];
   const alvs = [];

@@ -12,6 +12,7 @@ import { se11Screen } from "./screens/se11.js";
 import { se16Screen } from "./screens/se16.js";
 import { se84Screen } from "./screens/se84.js";
 import { gamesScreen } from "./screens/games.js";
+import { se91Screen } from "./screens/se91.js";
 
 // guía de práctica sola, en pantalla completa (se abre en otra ventana)
 async function bootGuideWindow() {
@@ -54,6 +55,7 @@ async function boot() {
     SE84: (app) => se84Screen(app),
     SE80: (app) => se84Screen(app),
     ZJUEGOS: (app) => gamesScreen(app),
+    SE91: (app) => se91Screen(app),
   };
   const app = new App(root, { transactions, guide: guidePanel });
   app.engine = engine;

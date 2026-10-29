@@ -90,6 +90,7 @@ export class App {
             ["SE11 - Diccionario ABAP", () => this.command("/nSE11")],
             ["SE16 - Browser de datos", () => this.command("/nSE16")],
             ["SE84 - Sistema info repositorio", () => this.command("/nSE84")],
+            ["SE91 - Clases de mensajes", () => this.command("/nSE91")],
             ["ZJUEGOS - Retos y juegos", () => this.command("/nZJUEGOS")],
             "-",
             ["Menú SAP Easy Access", () => this.home()],

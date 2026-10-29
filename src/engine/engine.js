@@ -194,6 +194,7 @@ export class Engine {
     const files = [
       ...this.libFiles.map((f) => new abaplint.MemoryFile(f.filename, f.contents)),
       ...ctx.tables.map((t) => new abaplint.MemoryFile(t.name.toLowerCase() + ".tabl.xml", tableToXml(t))),
+      ...(ctx.extraFiles || []).map((f) => new abaplint.MemoryFile(f.filename, f.contents)),
       new abaplint.MemoryFile(progFile, pp.source),
     ];
     const reg = new abaplint.Registry(lintConfig()).addFiles(files);
@@ -333,6 +334,8 @@ export class Engine {
 
     const abap = new ABAP({ console: new MemoryConsole() });
     globalThis.abap = abap;
+    // textos de las clases de mensajes (SE91)
+    abap.MSAG = ctx.msgTexts || {};
     abap.context.databaseConnections["DEFAULT"] = this.db;
     const sy = abap.builtin.sy.get();
     const now = new Date();

@@ -68,6 +68,11 @@ export async function runProgram(app, name, opts = {}) {
           app.push(session.selScreen);
         }
         if (msg) app.status(msg.text, msg.type);
+        else if (opts.pendingMsg) {
+          // mensaje del programa (p. ej. MESSAGE tipo E en START-OF-SELECTION) al volver a la pantalla
+          app.status(opts.pendingMsg.text, opts.pendingMsg.type);
+          opts.pendingMsg = null;
+        }
       }),
     alv: (snap) =>
       new Promise((resolve) => {
@@ -113,7 +118,7 @@ export async function runProgram(app, name, opts = {}) {
     store.save();
   }
 
-  const rerunIfScreen = () => {
+  const rerunIfScreen = (pendingMsg) => {
     if (session.selScreen && app.stack.includes(session.selScreen)) {
       // volver a la pantalla de selección, como en SAP
       while (app.current() !== session.selScreen && app.stack.length > 1) {
@@ -121,7 +126,7 @@ export async function runProgram(app, name, opts = {}) {
         s.destroy?.();
       }
       app.show(session.selScreen);
-      runProgram(app, name, { ...opts, debug: undefined, session });
+      runProgram(app, name, { ...opts, debug: undefined, session, pendingMsg });
       return true;
     }
     return false;
@@ -146,9 +151,7 @@ export async function runProgram(app, name, opts = {}) {
     case "message":
       if (res.list?.length && res.type !== "E") break;
       if (session.selScreen && app.stack.includes(session.selScreen)) {
-        app.status(res.text, res.displayLike || res.type);
-        rerunIfScreen();
-        app.status(res.text, res.displayLike || res.type);
+        rerunIfScreen({ text: res.text, type: res.displayLike || res.type });
       } else {
         app.status(res.text, res.displayLike || res.type);
       }
@@ -191,7 +194,12 @@ function selectionScreen(app, name, title, ctx) {
     tcode: "SE38",
     title: () => title,
     lastValues: null,
-    toolbar: () => [{ icon: "exec", label: "Ejecutar", key: "F8", action: () => execute(), primary: true }],
+    toolbar: () => [
+      { icon: "exec", label: "Ejecutar", key: "F8", action: () => execute(), primary: true },
+      "-",
+      { icon: "save", label: "Guardar como variante", action: () => saveVariant() },
+      { icon: "layout", label: "Obtener variante", tip: "Cargar valores guardados (Shift+F5)", key: "Shift+F5", action: () => loadVariant() },
+    ],
     onEnter: () => execute(),
     prepare(m, v, msg, res) {
       meta = m;
@@ -324,6 +332,58 @@ function selectionScreen(app, name, title, ctx) {
     }
     formEl.replaceChildren(root);
     setTimeout(() => formEl.querySelector("input.sap-input")?.focus(), 10);
+  }
+
+  // ---- variantes: valores guardados de la pantalla de selección ----
+  async function saveVariant() {
+    const all = ((store.data.variants ||= {})[name] ||= {});
+    const nameIn = h("input", { class: "sap-input upper", maxlength: 14, placeholder: "Ej.: SOCIEDAD_1000", oninput: (e) => (e.target.value = e.target.value.toUpperCase()) });
+    const descIn = h("input", { class: "sap-input", maxlength: 30, placeholder: "Descripción" });
+    const ok = await dialog({
+      title: "Guardar variante",
+      body: h("div", { class: "form-grid" }, h("label", { class: "required" }, "Nombre de variante"), nameIn, h("label", {}, "Significado"), descIn),
+      buttons: [
+        { label: "Grabar", value: true, primary: true },
+        { label: "Cancelar", value: false },
+      ],
+    });
+    if (!ok) return;
+    const vn = nameIn.value.trim();
+    if (!vn) return app.status("Indique un nombre de variante", "E");
+    if (all[vn] && !(await dialog({ title: "Variante", icon: "question", body: `La variante ${vn} ya existe. ¿Sobrescribirla?`, buttons: [{ label: "Sí", value: true, primary: true }, { label: "No", value: false }] }))) return;
+    all[vn] = { description: descIn.value.trim(), values: JSON.parse(JSON.stringify(values)), at: new Date().toISOString(), user: store.data.settings.user };
+    store.save();
+    app.status(`Variante ${vn} grabada`, "S");
+  }
+
+  async function loadVariant() {
+    const all = store.data.variants?.[name] || {};
+    const names = Object.keys(all);
+    if (!names.length) return app.status("No hay variantes para este programa. Use 'Guardar como variante'.", "W");
+    let chosen = null;
+    const list = h(
+      "div",
+      { class: "f4-list" },
+      names.map((vn) =>
+        h(
+          "button",
+          {
+            class: "f4-row",
+            onclick: (e) => {
+              chosen = vn;
+              e.currentTarget.closest(".dlg-overlay").querySelector(".btn-primary").click();
+            },
+          },
+          h("b", {}, vn),
+          h("span", {}, (all[vn].description || "") + " · " + new Date(all[vn].at).toLocaleDateString("es-PE")),
+        ),
+      ),
+    );
+    const r = await dialog({ title: "Buscar variante", body: list, width: "520px", buttons: [{ label: "Cancelar", value: false }, { label: "", value: true, primary: true }], onOpen: (o) => (o.querySelector(".btn-primary").style.display = "none") });
+    if (!r || !chosen) return;
+    values = JSON.parse(JSON.stringify(all[chosen].values));
+    renderForm();
+    app.status(`Variante ${chosen} cargada`, "S");
   }
 
   async function multiSelect(s) {
