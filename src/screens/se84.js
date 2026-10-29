@@ -19,9 +19,13 @@ export function se84Screen(app) {
     const type = typeSel.value;
     const out = [];
     if (type !== "TABL") {
-      for (const p of store.programs()) out.push({ type: "PROG", name: p.name, desc: p.title, status: p.activeSource === null ? "Nuevo" : p.activeSource === p.source ? "Activo" : "Inactivo", changed: p.changed });
+      for (const p of store.programs()) {
+        if (type === "PROG" && p.type === "I") continue;
+        if (type === "INCL" && p.type !== "I") continue;
+        out.push({ type: "PROG", sub: p.type === "I" ? "I" : "1", name: p.name, desc: p.title, status: p.activeSource === null ? "Nuevo" : p.activeSource === p.source ? "Activo" : "Inactivo", changed: p.changed });
+      }
     }
-    if (type !== "PROG") {
+    if (type !== "PROG" && type !== "INCL") {
       for (const t of store.tables()) out.push({ type: "TABL", name: t.name, desc: t.description, status: t.active ? "Activo" : "Nuevo", changed: t.created });
       if (stdCheck.checked) for (const t of Object.values(STANDARD_TABLES)) out.push({ type: "TABL", name: t.name, desc: t.description, status: "Activo (estándar)" });
     }
@@ -37,7 +41,7 @@ export function se84Screen(app) {
     render(el) {
       nameInput = input({ value: "Z*", class: "sap-input upper w-30", autofocus: true, oninput: (e) => (e.target.value = e.target.value.toUpperCase()) });
       descInput = input({ class: "sap-input w-30" });
-      typeSel = h("select", { class: "sap-input" }, h("option", { value: "ALL" }, "Todos los objetos"), h("option", { value: "PROG" }, "Programas"), h("option", { value: "TABL" }, "Tablas base de datos"));
+      typeSel = h("select", { class: "sap-input" }, h("option", { value: "ALL" }, "Todos los objetos"), h("option", { value: "PROG" }, "Programas ejecutables"), h("option", { value: "INCL" }, "Includes"), h("option", { value: "TABL" }, "Tablas base de datos"));
       stdCheck = h("input", { type: "checkbox" });
       el.append(
         h(
@@ -92,7 +96,7 @@ function resultScreen(app, res) {
                 h(
                   "tr",
                   { class: "clickable", ondblclick: () => open(o), title: "Doble clic para abrir" },
-                  h("td", {}, h("span", { class: "ico ico-" + (o.type === "PROG" ? "editor" : "ddic") }), o.type === "PROG" ? " Programa" : " Tabla"),
+                  h("td", {}, h("span", { class: "ico ico-" + (o.type === "PROG" ? (o.sub === "I" ? "include" : "editor") : "ddic") }), o.type === "PROG" ? (o.sub === "I" ? " Include" : " Programa") : " Tabla"),
                   h("td", { class: "mono" }, h("b", {}, o.name)),
                   h("td", {}, o.desc || ""),
                   h("td", {}, o.status),

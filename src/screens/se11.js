@@ -298,9 +298,9 @@ function tableScreen(app, n, initialMode, isNew) {
             : h(
                 "td",
                 { class: "row-actions" },
-                h("button", { class: "mini", title: "Subir", onclick: () => move(i, -1) }, "▲"),
-                h("button", { class: "mini", title: "Bajar", onclick: () => move(i, 1) }, "▼"),
-                h("button", { class: "mini danger", title: "Borrar fila", onclick: () => { work.fields.splice(i, 1); markDirty(); render(); } }, "✕"),
+                h("button", { class: "mini", title: "Subir", onclick: () => move(i, -1) }, h("span", { class: "ico ico-sortup" })),
+                h("button", { class: "mini", title: "Bajar", onclick: () => move(i, 1) }, h("span", { class: "ico ico-sortdown" })),
+                h("button", { class: "mini danger", title: "Borrar fila", onclick: () => { work.fields.splice(i, 1); markDirty(); render(); } }, h("span", { class: "ico ico-close" })),
               ),
         ),
       );

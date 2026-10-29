@@ -250,7 +250,7 @@ function selectionScreen(app, name, title, ctx) {
         const multi = h(
           "button",
           { class: "multi-btn" + (rows.length > 1 || (first.sign === "E" && first.low) ? " filled" : ""), title: "Selección múltiple", onclick: () => multiSelect(s) },
-          "➔",
+          h("span", { class: "ico ico-arrow" }),
         );
         cur().append(
           h(

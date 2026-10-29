@@ -109,8 +109,8 @@ export function alvScreen(app, snap, progTitle, onClose) {
             },
           },
           c.label,
-          s ? h("span", { class: "sort-ind" }, s.down ? " ▼" : " ▲") : null,
-          totals.has(c.name) ? h("span", { class: "sum-ind" }, " Σ") : null,
+          s ? h("span", { class: "ico sort-ind " + (s.down ? "ico-sortdown" : "ico-sortup") }) : null,
+          totals.has(c.name) ? h("span", { class: "ico sum-ind ico-sum" }) : null,
         );
       }),
     );

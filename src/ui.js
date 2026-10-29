@@ -62,7 +62,7 @@ export function dialog({ title, body, buttons = [{ label: "Continuar", value: tr
       h(
         "div",
         { class: "dlg", style: width ? { width } : undefined, role: "dialog" },
-        h("div", { class: "dlg-title" }, title || "Información", h("button", { class: "dlg-x", title: "Cancelar (F12)", onclick: () => close(undefined) }, "✕")),
+        h("div", { class: "dlg-title" }, title || "Información", h("button", { class: "dlg-x", title: "Cancelar (F12)", onclick: () => close(undefined) }, h("span", { class: "ico ico-close" }))),
         h("div", { class: "dlg-body" }, icon ? h("div", { class: "dlg-icon dlg-icon-" + icon }) : null, content),
         h(
           "div",

@@ -4,6 +4,7 @@ import { Transpiler, config as transpilerConfig } from "@abaplint/transpiler";
 import { TranspileTypes } from "@abaplint/transpiler/build/src/transpile_types.js";
 import { ABAP, MemoryConsole } from "@abaplint/runtime";
 import { preprocess } from "./preprocess.js";
+import { expandIncludes } from "./includes.js";
 import { tableToXml } from "./ddic.js";
 import { STANDARD_TABLES, standardRows } from "./standard.js";
 import { formatValue, ListOutput } from "./output.js";
@@ -50,7 +51,8 @@ function translateIssue(msg) {
     .replace(/^Type "([^"]+)" not found/, 'El tipo "$1" no existe')
     .replace(/^Method "([^"]+)" not found/, 'El método "$1" no existe')
     .replace(/^Class "([^"]+)" not found/, 'La clase "$1" no existe')
-    .replace(/^Expected "([^"]+)"/, 'Se esperaba "$1"');
+    .replace(/^Expected "([^"]+)"/, 'Se esperaba "$1"')
+    .replace(/^FORM definition "([^"]+)" not found/, 'No existe la subrutina FORM "$1" (¿falta crearla o falta un INCLUDE?)');
 }
 
 export class Engine {
@@ -175,7 +177,10 @@ export class Engine {
 
   // ---------------- compilación ----------------
   buildRegistry(program, ctx) {
-    const pp = preprocess(program.source, program.name, ctx.texts || {});
+    const resolve = ctx.resolveInclude || (() => null);
+    const exp = expandIncludes(program.source, program.name, resolve);
+    const pp = preprocess(exp.source, program.name, ctx.texts || {});
+    pp.expansion = exp;
     const progFile = program.name.toLowerCase() + ".prog.abap";
     const files = [
       ...this.libFiles.map((f) => new abaplint.MemoryFile(f.filename, f.contents)),
@@ -210,8 +215,18 @@ export class Engine {
       seen.add(k);
       return true;
     });
-    uniq.sort((a, b) => a.row - b.row);
-    return { errors: uniq, reg, pp, progFile };
+    // traducir líneas del código expandido a (objeto, línea) del include correspondiente
+    const exp = pp.expansion;
+    const main = program.name.toUpperCase();
+    const mapped = uniq.map((e) => {
+      const m = exp.map[e.row - 1] || exp.map[exp.map.length - 1] || { obj: main, line: e.row };
+      const me = exp.map[(e.endRow || e.row) - 1];
+      const sameEnd = me && me.obj === m.obj;
+      return { ...e, obj: m.obj, row: m.line, endRow: sameEnd ? me.line : m.line, endCol: sameEnd ? e.endCol : e.col + 1 };
+    });
+    const all = [...exp.errors.map((e) => ({ key: "include", endRow: e.row, ...e })), ...mapped];
+    all.sort((a, b) => (a.obj === b.obj ? a.row - b.row : a.obj === main ? -1 : b.obj === main ? 1 : a.obj.localeCompare(b.obj)));
+    return { errors: all, reg, pp, progFile };
   }
 
   async compile(program, ctx) {
@@ -299,12 +314,17 @@ export class Engine {
     sy.datum.set(`${now.getFullYear()}${p2(now.getMonth() + 1)}${p2(now.getDate())}`);
     sy.uzeit.set(`${p2(now.getHours())}${p2(now.getMinutes())}${p2(now.getSeconds())}`);
     sy.uname.set(ctx.user || "ALUMNO");
-    sy.repid?.set(program.name.toUpperCase());
-    sy.cprog?.set(program.name.toUpperCase());
-    sy.langu?.set(ctx.lang === "EN" ? "E" : "S");
-    sy.mandt?.set("100");
-    sy.sysid?.set("NPL");
-    sy.tcode?.set("SE38");
+    const setSy = (f, len, v) => {
+      if (!sy[f]) sy[f] = new abap.types.Character(len);
+      sy[f].set(v);
+    };
+    setSy("repid", 40, program.name.toUpperCase());
+    setSy("cprog", 40, program.name.toUpperCase());
+    setSy("langu", 1, ctx.lang === "EN" ? "E" : "S");
+    setSy("mandt", 3, "100");
+    setSy("sysid", 3, "NPL");
+    setSy("tcode", 20, "SE38");
+    setSy("host", 32, "practica-abap");
 
     // el mandante se rellena automáticamente, como en SAP
     const fillMandt = (opts) => {

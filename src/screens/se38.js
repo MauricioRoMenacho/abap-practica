@@ -2,6 +2,7 @@ import { h, dialog, confirm, input, field } from "../ui.js";
 import { store } from "../store.js";
 import { runProgram } from "./run.js";
 import { preprocess } from "../engine/preprocess.js";
+import { expandIncludes, collectIncludes } from "../engine/includes.js";
 
 export function validProgName(n) {
   if (!n) return "Indique un nombre de programa";
@@ -31,7 +32,7 @@ export async function pickProgram() {
           },
         },
         h("b", {}, p.name),
-        h("span", {}, p.title),
+        h("span", {}, p.title + (p.type === "I" ? " (include)" : "")),
       ),
     ),
   );
@@ -73,6 +74,7 @@ export function se38Screen(app, presetName) {
       return;
     }
     const title = input({ maxlength: 70, placeholder: "Ej.: Mi primer programa" });
+    const type = h("select", { class: "sap-input" }, h("option", { value: "1" }, "1 - Programa ejecutable"), h("option", { value: "I" }, "I - Programa include"));
     const ok = await dialog({
       title: `Atributos de programa ${n}`,
       width: "560px",
@@ -82,10 +84,10 @@ export function se38Screen(app, presetName) {
         h("label", { class: "required" }, "Título"),
         title,
         h("label", {}, "Tipo"),
-        h("select", { class: "sap-input", disabled: true }, h("option", {}, "Programa ejecutable")),
+        type,
         h("label", {}, "Idioma original"),
         h("input", { class: "sap-input", value: "ES", disabled: true }),
-        h("p", { class: "hint", style: { gridColumn: "1 / -1" } }, "En un sistema real ahora pediría paquete y orden de transporte. Aquí se graba directamente como objeto local."),
+        h("p", { class: "hint", style: { gridColumn: "1 / -1" } }, "Un include no se ejecuta solo: contiene parte del código y se inserta en un programa con la instrucción INCLUDE. En un sistema real ahora pediría paquete y orden de transporte; aquí se graba directamente como objeto local."),
       ),
       buttons: [
         { label: "Grabar", value: () => title.value.trim(), primary: true },
@@ -96,7 +98,7 @@ export function se38Screen(app, presetName) {
       if (ok === "") app.status("Indique un título para el programa", "E");
       return;
     }
-    store.createProgram(n, ok);
+    store.createProgram(n, ok, type.value);
     app.status(`Programa ${n} creado`, "S");
     app.push(editorScreen(app, n, "change"));
   };
@@ -117,7 +119,7 @@ export function se38Screen(app, presetName) {
     if (err) return app.status(err, "E");
     if (store.program(t)) return app.status(`El programa ${t} ya existe`, "E");
     const src = store.program(n);
-    const p = store.createProgram(t, src.title);
+    const p = store.createProgram(t, src.title, src.type || "1");
     p.source = src.source.replace(new RegExp(`REPORT\\s+${n}`, "i"), `REPORT ${t.toLowerCase()}`);
     p.texts = JSON.parse(JSON.stringify(src.texts));
     p.seltexts = JSON.parse(JSON.stringify(src.seltexts));
@@ -130,7 +132,7 @@ export function se38Screen(app, presetName) {
     tcode: "SE38",
     title: "ABAP Editor: Pantalla inicial",
     toolbar: () => [
-      { icon: "exec", label: "Ejecutar", key: "F8", action: () => { const n = check(true); if (n) runProgram(app, n); } },
+      { icon: "exec", label: "Ejecutar", key: "F8", action: () => { const n = check(true); if (n) runOrMain(app, n); } },
       { icon: "check", tip: "Verificar", key: "Ctrl+F2", action: () => { const n = check(true); if (n) app.push(editorScreen(app, n, "show", { autoCheck: true })); } },
       "-",
       { icon: "copy", tip: "Copiar", action: copy },
@@ -219,15 +221,20 @@ export function editorScreen(app, n, initialMode, opts = {}) {
   const prog = () => store.program(n);
   const dirty = () => editor && editor.getValue() !== prog().source;
 
+  const isInc = () => prog().type === "I";
+  const kind = () => (isInc() ? "Include" : "Report");
+
   const updateHeader = () => {
     const p = prog();
     const inactive = p.activeSource === null || p.activeSource !== p.source || dirty();
+    const mains = isInc() ? store.mainProgramsOf(n) : [];
     headerEl.replaceChildren(
-      h("span", { class: "eh-label" }, "Report"),
+      h("span", { class: "eh-label" }, kind()),
       h("b", {}, n),
       h("span", { class: "badge " + (inactive ? "badge-warn" : "badge-ok") }, inactive ? "Inactivo" : "Activo"),
       dirty() ? h("span", { class: "badge badge-dirty" }, "modificado sin grabar") : null,
       h("span", { class: "eh-title" }, p.title),
+      isInc() ? h("span", { class: "eh-title" }, mains.length ? "Programa principal: " + mains.join(", ") : "Aún no está incluido en ningún programa") : null,
     );
   };
 
@@ -238,36 +245,52 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     p.changed = new Date().toISOString();
     store.save();
     updateHeader();
-    if (!silent) app.status(`Se ha grabado el programa ${n} (inactivo)`, "S");
+    if (!silent) app.status(`Se ha grabado ${isInc() ? "el include" : "el programa"} ${n} (inactivo)`, "S");
     return true;
+  };
+
+  const openObject = async (obj, line, errors) => {
+    if (obj === n) {
+      editor.revealLineInCenter(line);
+      editor.setPosition({ lineNumber: line, column: 1 });
+      editor.focus();
+      return;
+    }
+    if (mode === "change") save(true);
+    app.push(editorScreen(app, obj, mode, { errors: errors || [], gotoLine: line }));
   };
 
   const showErrors = async (errors, title) => {
     lastErrors = errors;
     const { setMarkers } = await import("../editor.js");
-    setMarkers(editor, errors);
+    if (!editor) return;
+    setMarkers(editor, errors.filter((e) => !e.obj || e.obj === n));
     if (!errors.length) {
       errorsEl.replaceChildren();
       errorsEl.classList.remove("open");
       return;
     }
+    const multi = errors.some((e) => e.obj && e.obj !== n);
     errorsEl.classList.add("open");
     errorsEl.replaceChildren(
-      h("div", { class: "err-head" }, h("span", { class: "ico ico-error" }), title || `${errors.length} error(es) de sintaxis`, h("button", { class: "err-close", onclick: () => errorsEl.classList.remove("open") }, "✕")),
+      h("div", { class: "err-head" }, h("span", { class: "ico ico-error" }), title || `${errors.length} error(es) de sintaxis`, h("button", { class: "err-close", onclick: () => errorsEl.classList.remove("open") }, h("span", { class: "ico ico-close" }))),
       h(
         "table",
         { class: "err-table" },
-        h("tr", {}, h("th", {}, "Línea"), h("th", {}, "Mensaje")),
+        h("tr", {}, multi ? h("th", {}, "Objeto") : null, h("th", {}, "Línea"), h("th", {}, "Mensaje")),
         errors.map((e) =>
           h(
             "tr",
             {
+              title: e.obj && e.obj !== n ? `Abrir ${e.obj}` : "",
               onclick: () => {
+                if (e.obj && e.obj !== n) return openObject(e.obj, e.row, errors.filter((x) => x.obj === e.obj));
                 editor.revealLineInCenter(e.row);
                 editor.setPosition({ lineNumber: e.row, column: e.col });
                 editor.focus();
               },
             },
+            multi ? h("td", { class: "mono" }, e.obj || n) : null,
             h("td", { class: "num" }, e.row),
             h("td", {}, e.message),
           ),
@@ -276,14 +299,30 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     );
   };
 
+  // verifica el objeto: un include se verifica dentro de su programa principal
+  const runCheck = () => {
+    if (!isInc()) {
+      return { errors: app.engine.check({ name: n, source: editor.getValue() }, ctxFor(n, "edit")).errors, main: n };
+    }
+    const mains = store.mainProgramsOf(n);
+    if (mains.length) {
+      const main = store.program(mains[0]);
+      return { errors: app.engine.check({ name: main.name, source: main.source }, ctxFor(main.name, "edit")).errors, main: main.name };
+    }
+    const wrapper = `REPORT zz_check_${n.toLowerCase().substring(0, 15)}.\nINCLUDE ${n}.`;
+    const res = app.engine.check({ name: "ZZ_CHECK", source: wrapper }, ctxFor(n, "edit"));
+    return { errors: res.errors.filter((e) => e.obj !== "ZZ_CHECK"), main: null };
+  };
+
   const doCheck = async () => {
     save(true);
     app.status("Verificando...", "I");
     await new Promise((r) => setTimeout(r, 10));
-    const { errors } = app.engine.check({ name: n, source: editor.getValue() }, ctxFor(n));
+    const { errors, main } = runCheck();
     await showErrors(errors);
-    if (errors.length) app.status(`El programa ${n} tiene errores de sintaxis`, "E");
-    else app.status(`El programa ${n} no tiene errores de sintaxis`, "S");
+    const what = isInc() ? `El include ${n}` : `El programa ${n}`;
+    if (errors.length) app.status(`${what} tiene errores de sintaxis` + (isInc() && main ? ` (verificado dentro de ${main})` : ""), "E");
+    else app.status(`${what} no tiene errores de sintaxis` + (isInc() && main ? ` (verificado dentro de ${main})` : ""), "S");
     return errors.length === 0;
   };
 
@@ -291,26 +330,51 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     if (mode === "change") save(true);
     const ok = await doCheck();
     if (!ok) {
-      app.status(`No se pudo activar: el programa ${n} tiene errores de sintaxis`, "E");
+      app.status(`No se pudo activar: ${isInc() ? "el include" : "el programa"} ${n} tiene errores de sintaxis`, "E");
       return false;
     }
     const p = prog();
     p.activeSource = editor.getValue();
     p.changed = new Date().toISOString();
+    // al activar un programa se activan también sus includes inactivos (lista de objetos inactivos)
+    let extra = 0;
+    for (const inc of collectIncludes(p.source, (x) => (store.isInclude(x) ? store.program(x).source : null))) {
+      const ip = store.program(inc);
+      if (ip.activeSource !== ip.source) {
+        ip.activeSource = ip.source;
+        extra++;
+      }
+    }
     store.save();
     updateHeader();
-    app.status(`Se ha activado el objeto ${n}`, "S");
+    app.status(extra ? `Se activaron ${extra + 1} objetos: ${n} y ${extra} include(s)` : `Se ha activado el objeto ${n}`, "S");
     return true;
   };
 
   const execute = async () => {
     if (mode === "change") save(true);
+    if (isInc()) {
+      const mains = store.mainProgramsOf(n);
+      if (!mains.length) return app.status(`Los includes no se pueden ejecutar. Inclúyalo en un programa con INCLUDE ${n}.`, "E");
+      const r = await dialog({ title: "Include", icon: "question", body: `Un include no se puede ejecutar solo. ¿Ejecutar el programa principal ${mains[0]}?`, buttons: [{ label: "Ejecutar " + mains[0], value: true, primary: true }, { label: "Cancelar", value: false }] });
+      if (!r) return;
+      const ip = prog();
+      if (ip.activeSource !== ip.source && !(await activate())) return;
+      return runOrMain(app, mains[0], { onSyntax: (errors) => showErrors(errors) });
+    }
     const p = prog();
-    if (p.activeSource === null || p.activeSource !== editor.getValue()) {
+    const incs = [...collectIncludes(p.source, (x) => (store.isInclude(x) ? store.program(x).source : null))];
+    const inactiveIncs = incs.filter((x) => store.program(x).activeSource !== store.program(x).source);
+    if (p.activeSource === null || p.activeSource !== editor.getValue() || inactiveIncs.length) {
       const r = await dialog({
         title: "Versión inactiva",
         icon: "question",
-        body: p.activeSource === null ? `El programa ${n} todavía no está activo. ¿Activarlo y ejecutarlo?` : `El programa ${n} tiene cambios sin activar. Se ejecuta siempre la versión ACTIVA. ¿Activar y ejecutar?`,
+        body:
+          p.activeSource === null
+            ? `El programa ${n} todavía no está activo. ¿Activarlo y ejecutarlo?`
+            : inactiveIncs.length && p.activeSource === editor.getValue()
+              ? `Hay includes con cambios sin activar (${inactiveIncs.join(", ")}). ¿Activar y ejecutar?`
+              : `El programa ${n} tiene cambios sin activar. Se ejecuta siempre la versión ACTIVA. ¿Activar y ejecutar?`,
         buttons: [
           { label: "Activar y ejecutar", value: "act", primary: true },
           p.activeSource !== null ? { label: "Ejecutar versión activa", value: "old" } : null,
@@ -323,6 +387,21 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     runProgram(app, n, {
       onSyntax: (errors) => showErrors(errors),
     });
+  };
+
+  const navigateInclude = async (inc) => {
+    const ip = store.program(inc);
+    if (ip) {
+      if (ip.type !== "I") return app.status(`${inc} no es un include`, "W");
+      return openObject(inc, 1);
+    }
+    const err = validProgName(inc);
+    if (err) return app.status(err, "E");
+    const ok = await confirm(`El include ${inc} no existe. ¿Desea crearlo?`, "Crear include", "Crear", "Cancelar");
+    if (!ok) return;
+    store.createProgram(inc, `Include de ${n}`, "I");
+    app.status(`Include ${inc} creado`, "S");
+    openObject(inc, 1);
   };
 
   const pretty = async () => {
@@ -356,7 +435,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     id: "SE38-ED",
     tcode: "SE38",
     cls: "editor-screen",
-    title: () => `ABAP Editor: ${mode === "change" ? "Modificar" : "Visualizar"} Report ${n}`,
+    title: () => `ABAP Editor: ${mode === "change" ? "Modificar" : "Visualizar"} ${kind()} ${n}`,
     toolbar: () => [
       { icon: mode === "change" ? "display" : "change", tip: "Visualizar ↔ Modificar", key: "Ctrl+F1", action: toggleMode },
       "-",
@@ -365,7 +444,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       { icon: "exec", label: "Ejecutar", key: "F8", action: execute, primary: true },
       "-",
       { icon: "pretty", label: "Pretty Printer", key: "Shift+F1", action: pretty, disabled: mode !== "change" },
-      { icon: "text", label: "Elementos de texto", action: () => app.push(textElementsScreen(app, n, mode)) },
+      { icon: "text", label: "Elementos de texto", action: () => { const target = isInc() ? store.mainProgramsOf(n)[0] : n; if (!target) return app.status("Los elementos de texto pertenecen al programa principal: incluya primero este include en un programa", "W"); app.push(textElementsScreen(app, target, mode)); } },
     ],
     keys: { "Ctrl+S": () => save(false) },
     render(el) {
@@ -376,6 +455,22 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       import("../editor.js").then(({ createEditor }) => {
         editor = createEditor(host, prog().source, mode !== "change");
         editor.onDidChangeModelContent(() => updateHeader());
+        // navegación: doble clic sobre el nombre de un INCLUDE lo abre (o lo crea)
+        editor.onMouseDown((e) => {
+          if (e.event.browserEvent.detail !== 2 || !e.target.position) return;
+          const pos = e.target.position;
+          const text = editor.getModel().getLineContent(pos.lineNumber);
+          const m = text.match(/^(\s*INCLUDE\s+)([A-Za-z0-9_/]+)/i);
+          if (!m || /^(TYPE|STRUCTURE)$/i.test(m[2])) return;
+          const from = m[1].length + 1;
+          if (pos.column < from || pos.column > from + m[2].length) return;
+          setTimeout(() => navigateInclude(m[2].toUpperCase()), 0);
+        });
+        if (opts.gotoLine) {
+          editor.revealLineInCenter(opts.gotoLine);
+          editor.setPosition({ lineNumber: opts.gotoLine, column: 1 });
+          opts.gotoLine = null;
+        }
         updateHeader();
         editor.focus();
         if (lastErrors.length) showErrors(lastErrors);
@@ -419,7 +514,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
   };
 }
 
-export function ctxFor(name) {
+export function ctxFor(name, mode = "active") {
   const p = store.program(name);
   const lang = store.data.settings.lang || "S";
   const other = lang === "S" ? "E" : "S";
@@ -432,7 +527,37 @@ export function ctxFor(name) {
     user: store.data.settings.user,
     lang: lang === "E" ? "EN" : "ES",
     decimalNotation: store.data.settings.decimalNotation,
+    // INCLUDE: en ejecución se usa la versión activa; al verificar, la grabada
+    resolveInclude: (inc) => {
+      const ip = store.program(inc);
+      if (!ip) return null;
+      if (ip.type !== "I") return { error: "notinclude" };
+      const src = mode === "active" ? ip.activeSource : ip.source;
+      if (src === null || src === undefined) return { error: "inactive" };
+      return { source: src };
+    },
   };
+}
+
+// F8 sobre un include: se ejecuta su programa principal
+export function runOrMain(app, name, opts) {
+  if (store.isInclude(name)) {
+    const mains = store.mainProgramsOf(name);
+    if (!mains.length) return app.status(`Los includes no se pueden ejecutar. Inclúyalo en un programa con INCLUDE ${name}.`, "E");
+    app.status(`${name} es un include: se ejecuta su programa principal ${mains[0]}`, "I");
+    return runProgram(app, mains[0], opts);
+  }
+  return runProgram(app, name, opts);
+}
+
+// código del programa con sus includes expandidos (para buscar textos, parámetros...)
+export function expandedSource(name) {
+  const p = store.program(name);
+  if (!p) return "";
+  return expandIncludes(p.source, name, (inc) => {
+    const ip = store.program(inc);
+    return ip && ip.type === "I" ? { source: ip.source } : null;
+  }).source;
 }
 
 import { STANDARD_TABLES } from "../engine/standard.js";
@@ -450,13 +575,14 @@ export function textElementsScreen(app, n, initialMode) {
     const t = p().texts || { S: {}, E: {} };
     const ids = new Set([...Object.keys(t.S || {}), ...Object.keys(t.E || {})]);
     // símbolos usados en el código
-    for (const m of (p().source || "").matchAll(/TEXT-([A-Za-z0-9]{3})/gi)) ids.add(m[1].toUpperCase());
-    for (const m of (p().source || "").matchAll(/'(?:[^'\n]|'')*'\(([A-Za-z0-9]{3})\)/g)) ids.add(m[1].toUpperCase());
+    const src = expandedSource(n);
+    for (const m of src.matchAll(/TEXT-([A-Za-z0-9]{3})/gi)) ids.add(m[1].toUpperCase());
+    for (const m of src.matchAll(/'(?:[^'\n]|'')*'\(([A-Za-z0-9]{3})\)/g)) ids.add(m[1].toUpperCase());
     return [...ids].sort();
   };
   const rowsSel = () => {
     try {
-      const { meta } = preprocess(p().source, n, {});
+      const { meta } = preprocess(expandedSource(n), n, {});
       return [...meta.params.map((x) => x.name.toUpperCase()), ...meta.selopts.map((x) => x.name.toUpperCase())];
     } catch {
       return [];

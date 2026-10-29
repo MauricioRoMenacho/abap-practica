@@ -42,12 +42,40 @@ export const store = {
   programs() {
     return Object.values(this.data.programs).sort((a, b) => a.name.localeCompare(b.name));
   },
-  createProgram(name, title) {
+  isInclude(name) {
+    return this.program(name)?.type === "I";
+  },
+  // programas principales que incluyen a un include (directa o indirectamente)
+  mainProgramsOf(inc) {
+    const n = inc.toUpperCase();
+    const re = (x) => new RegExp("^\\s*INCLUDE\\s+" + x + "\\b", "im");
+    const parents = (x) => this.programs().filter((p) => p.name !== x && re(x).test(p.source || ""));
+    const out = [];
+    const seen = new Set([n]);
+    const queue = [n];
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const p of parents(cur)) {
+        if (seen.has(p.name)) continue;
+        seen.add(p.name);
+        if (p.type === "I") queue.push(p.name);
+        else out.push(p.name);
+      }
+    }
+    return out;
+  },
+  createProgram(name, title, type = "1") {
     const n = name.toUpperCase();
+    const line = "*&---------------------------------------------------------------------*";
+    const source =
+      type === "I"
+        ? `${line}\n*& Include ${n}\n${line}\n*& ${title}\n${line}\n\n`
+        : `${line}\n*& Report ${n}\n${line}\n*& ${title}\n${line}\nREPORT ${n.toLowerCase()}.\n\n`;
     this.data.programs[n] = {
       name: n,
       title,
-      source: `*&---------------------------------------------------------------------*\n*& Report ${n}\n*&---------------------------------------------------------------------*\n*& ${title}\n*&---------------------------------------------------------------------*\nREPORT ${n.toLowerCase()}.\n\n`,
+      type,
+      source,
       activeSource: null,
       texts: { S: {}, E: {} },
       seltexts: { S: {}, E: {} },
