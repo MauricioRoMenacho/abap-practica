@@ -10,7 +10,7 @@ const TX = [
 ];
 
 // transacciones adicionales (árbol y accesos rápidos)
-export const MORE_TX = [["SE24", "Clases globales"], ["SE37", "Módulos de función"], ["SE91", "Clases de mensajes"], ["ST05", "Traza SQL"], ["SM12", "Bloqueos"], ["ZAYUDA", "Glosario, examen y constancia"]];
+export const MORE_TX = [["ZUI5", "SAPUI5 / Fiori (Business Application Studio)"], ["SE24", "Clases globales"], ["SE37", "Módulos de función"], ["SE91", "Clases de mensajes"], ["ST05", "Traza SQL"], ["SM12", "Bloqueos"], ["ZAYUDA", "Glosario, examen y constancia"]];
 
 export function homeScreen(app) {
   return {

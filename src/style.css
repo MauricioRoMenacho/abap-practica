@@ -2688,3 +2688,40 @@ body.guide-window {
 .btn-primary .ico { --ic: currentColor !important; }
 .ico-unit::before { -webkit-mask: none !important; mask: none !important; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 1.5h4M7 1.5v4.2L3 13a1 1 0 0 0 .9 1.5h8.2A1 1 0 0 0 13 13L9 5.7V1.5' fill='%23fff' stroke='%234a5b6c' stroke-width='1'/%3E%3Cpath d='M4.6 10.5h6.8l1.2 2.3a.6.6 0 0 1-.5.9H3.9a.6.6 0 0 1-.5-.9z' fill='%234caf50'/%3E%3C/svg%3E") center / contain no-repeat !important; }
 .grid-table tr.grp td { background: #eef2f6; }
+
+/* ---------- ZUI5: entorno SAPUI5 ---------- */
+.content.ui5-screen { padding: 0; overflow: hidden; }
+.ui5-layout { display: grid; grid-template-columns: 220px minmax(320px, 1fr) minmax(360px, 1fr); height: 100%; min-height: 0; }
+.ui5-side { background: #f3f5f7; border-right: 1px solid #d5dbe1; overflow: auto; font-size: 13px; }
+.ui5-side-head { font-size: 11px; font-weight: 700; color: #5b6b7b; padding: 8px 10px 4px; letter-spacing: 0.5px; }
+.ft-proj { font-weight: 700; padding: 3px 8px; display: flex; gap: 4px; align-items: center; }
+.ft-dir { padding: 2px 8px; cursor: pointer; color: #24486a; font-weight: 600; user-select: none; }
+.ft-caret { display: inline-block; width: 12px; color: #7a8896; font-size: 10px; }
+.ft-file { padding: 2px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-file:hover { background: #e3ecf5; }
+.ft-file.active { background: #cfe0f1; }
+.ft-ext { display: inline-block; min-width: 28px; font-size: 9px; font-weight: 700; color: #fff; background: #8796a5; border-radius: 2px; text-align: center; margin-right: 5px; padding: 0 2px; text-transform: uppercase; }
+.ft-ext.ext-xml { background: #e66b00; }
+.ft-ext.ext-js { background: #c9a400; }
+.ft-ext.ext-json { background: #5c7a99; }
+.ft-ext.ext-properties { background: #2b8a3e; }
+.ft-ext.ext-html { background: #c0392b; }
+.ft-ext.ext-css { background: #2d6fb7; }
+.ft-dirty { color: #c0392b; font-weight: 700; margin-left: 4px; }
+.ui5-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid #d5dbe1; }
+.ui5-tab { padding: 5px 10px; background: #fff; border-bottom: 1px solid #e1e5ea; font-size: 12.5px; }
+.ui5-editor { flex: 1; min-height: 0; }
+.ui5-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
+.ui5-prev-head, .ui5-con-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid #e1e5ea; background: #f7f8f9; font-size: 12.5px; }
+.ui5-prev-head .btn, .ui5-con-head .btn { margin-left: auto; height: 22px; }
+.ui5-frame { flex: 1 1 62%; border: 0; width: 100%; min-height: 200px; background: #f5f6f7; }
+.ui5-console { flex: 0 0 30%; overflow: auto; font-family: var(--mono); font-size: 12px; background: #fff; border-top: 1px solid #e1e5ea; }
+.con-line { padding: 2px 8px; border-bottom: 1px solid #f0f0f0; white-space: pre-wrap; word-break: break-word; display: flex; gap: 6px; }
+.con-line[onclick], .con-line.con-error { cursor: default; }
+.con-time { color: #8a96a3; }
+.con-type { font-weight: 700; min-width: 44px; }
+.con-error { color: #b00020; background: #fff5f5; }
+.con-warn { color: #8a5a00; background: #fffaf0; }
+.con-info .con-type { color: #2b6cb0; }
+.con-count { color: #b00020; font-weight: 700; }
+.con-time, .con-type { white-space: nowrap; flex: none; }

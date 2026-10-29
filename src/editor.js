@@ -1,6 +1,12 @@
 // Editor ABAP basado en Monaco con resaltado de sintaxis estilo SE38.
 import * as monaco from "monaco-editor/esm/vs/editor/edcore.main";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import "monaco-editor/esm/vs/basic-languages/xml/xml.contribution";
+import "monaco-editor/esm/vs/basic-languages/html/html.contribution";
+import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
+import "monaco-editor/esm/vs/basic-languages/css/css.contribution";
+import "monaco-editor/esm/vs/basic-languages/ini/ini.contribution";
+import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution";
 
 self.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 
@@ -106,6 +112,49 @@ export function createEditor(el, value, readOnly) {
   });
   window.__editor = editor;
   return editor;
+}
+
+// editor para archivos SAPUI5 (XML, JS, JSON, properties, CSS) con un modelo por archivo
+const models = new Map();
+export function codeModel(key, value, language) {
+  let m = models.get(key);
+  if (m && !m.isDisposed()) {
+    if (m.getValue() !== value) m.setValue(value);
+    return m;
+  }
+  m = monaco.editor.createModel(value, language === "json" ? "javascript" : language);
+  models.set(key, m);
+  return m;
+}
+export function disposeModels(prefix) {
+  for (const [k, m] of models) if (k.startsWith(prefix)) {
+    m.dispose();
+    models.delete(k);
+  }
+}
+export function createCodeEditor(el, model, readOnly) {
+  const editor = monaco.editor.create(el, {
+    model,
+    theme: "se38",
+    readOnly,
+    fontFamily: "'Cascadia Mono', 'Consolas', 'Courier New', monospace",
+    fontSize: 13.5,
+    minimap: { enabled: false },
+    automaticLayout: true,
+    scrollBeyondLastLine: false,
+    tabSize: 4,
+    insertSpaces: true,
+    wordBasedSuggestions: "currentDocument",
+  });
+  window.__editor = editor;
+  return editor;
+}
+export function setCodeMarkers(model, errors) {
+  monaco.editor.setModelMarkers(
+    model,
+    "ui5",
+    errors.map((e) => ({ startLineNumber: e.row || 1, startColumn: e.col || 1, endLineNumber: e.row || 1, endColumn: (e.col || 1) + 200, message: e.message, severity: monaco.MarkerSeverity.Error })),
+  );
 }
 
 export function setMarkers(editor, errors) {
