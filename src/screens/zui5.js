@@ -375,6 +375,33 @@ export function ideScreen(app, name) {
     };
   };
 
+  // ui5 build: genera dist/ con Component-preload.js (todas las vistas, controladores y textos en un archivo)
+  const build = async () => {
+    saveAll(true);
+    const problems = await checkAll();
+    if (problems.length) return app.status("Corrija primero los errores (Ejecutar muestra el detalle)", "E");
+    await app.busy("ui5 build: generando dist/Component-preload.js...", async () => {
+      const files = proj().files;
+      const base = appId(name).replace(/\./g, "/");
+      for (const f of Object.keys(files)) if (f.startsWith("dist/")) delete files[f];
+      const mods = [];
+      for (const [f, c] of Object.entries(files)) {
+        if (!f.startsWith("webapp/") || f.startsWith("webapp/test/") || f.startsWith("webapp/localService/") || f.endsWith(".html")) continue;
+        const rel = f.slice(7);
+        const key = `${base}/${rel}`;
+        if (rel.endsWith(".js")) mods.push(`\t"${key}": function () {\n${c.trimEnd()}\n},`);
+        else if (/\.(xml|json|properties)$/.test(rel)) mods.push(`\t"${key}": ${JSON.stringify(c)},`);
+      }
+      files["dist/Component-preload.js"] = `//@ui5-bundle ${base}/Component-preload.js\nsap.ui.require.preload({\n${mods.join("\n").replace(/,$/, "")}\n});\n`;
+      for (const [f, c] of Object.entries(files)) if (f.startsWith("webapp/") && !f.startsWith("webapp/test/") && (f.endsWith(".html") || f.endsWith(".css") || f === "webapp/manifest.json" || f.startsWith("webapp/i18n/"))) files["dist/" + f.slice(7)] = c;
+      proj().changed = new Date().toISOString();
+      store.save();
+      renderTree();
+    }, 900);
+    log("info", `> npm run build  (ui5 build) - dist/Component-preload.js generado con ${Object.keys(proj().files).filter((f) => f.startsWith("dist/")).length} archivo(s) en dist/`);
+    app.status("Build terminado: revise la carpeta dist/", "S");
+  };
+
   const newFile = async () => {
     const pathI = input({ class: "sap-input mono", value: "webapp/view/", placeholder: "webapp/view/Detalle.view.xml" });
     const r = await dialog({ title: "Nuevo archivo", body: h("div", {}, field("Ruta del archivo", pathI, { required: true }), h("p", { class: "hint" }, "Ejemplos: webapp/view/Detalle.view.xml, webapp/controller/Detalle.controller.js, webapp/model/formatter.js, webapp/view/fragment/Ayuda.fragment.xml")), buttons: [{ label: "Crear", primary: true, value: () => pathI.value.trim() }, { label: "Cancelar", value: null }] });
@@ -418,6 +445,7 @@ export function ideScreen(app, name) {
       { icon: "unit", label: "Ejecutar este HTML", text: true, tip: "Abre en la vista previa el archivo .html actual (por ejemplo una página de pruebas QUnit)", action: () => (current.endsWith(".html") && current.startsWith("webapp/") ? run({ file: current.slice(7) }) : app.status("Abra primero un archivo .html de webapp/ (por ejemplo webapp/test/unit/unitTests.qunit.html)", "W")) },
       "-",
       { icon: "create", label: "Nuevo archivo", text: true, action: newFile },
+      { icon: "activate", label: "Build (ui5 build)", text: true, action: build },
       { icon: "delete", label: "Borrar archivo", action: deleteFile },
       "-",
       { icon: "expand", label: "Abrir en pestaña nueva", text: true, action: async () => { saveAll(true); await publishProject(name, proj().files); window.open(previewUrl(name), "_blank"); } },

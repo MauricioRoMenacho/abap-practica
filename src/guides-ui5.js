@@ -700,4 +700,378 @@ nombre=Name`, "webapp/i18n/i18n_en.properties"),
       },
     ],
   },
+  {
+    id: "u6",
+    title: "UI5 Paso 6",
+    subtitle: "OData V2: leer, filtrar, navegar y modificar datos",
+    steps: [
+      {
+        id: "u6s1",
+        title: "Aplicación con servicio OData y MockServer",
+        body: [
+          "En ZUI5 crea un proyecto nuevo con la plantilla <b>Aplicación con servicio OData V2 (vuelos)</b>, nombre <code>zflight</code> y título <code>Vuelos OData</code>. Explora los archivos nuevos:",
+          terms([
+            ["localService/metadata.xml", "El <b>$metadata</b> del servicio ZFLIGHT_SRV: describe las entidades (EntityType con su Key y Property), los conjuntos (EntitySet: Carriers, Connections, Flights, Customers, Bookings) y las relaciones (NavigationProperty: ToConnections, ToFlights...). En un sistema real lo genera SEGW o RAP."],
+            ["localService/mockdata/*.json", "Datos de prueba por EntitySet (salen de SCARR, SPFLI, SFLIGHT...)."],
+            ["localService/mockserver.js", "Arranca el <b>MockServer</b>: intercepta las peticiones HTTP a /sap/opu/odata/sap/ZFLIGHT_SRV/ y responde como lo haría SAP Gateway."],
+            ['manifest.json - dataSources', "La fuente de datos mainService: uri del servicio, tipo OData, versión 2.0."],
+            ['manifest.json - models ""', "El modelo por defecto es un <b>ODataModel</b> creado desde mainService. No hay que escribir código para crearlo."],
+          ], "Qué trae la plantilla"),
+          "Reemplaza la vista principal:",
+          file(`<mvc:View controllerName="zui5.zflight.controller.Main"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:core="sap.ui.core"
+    xmlns="sap.m">
+    <Page id="page" title="{i18n>title}">
+        <content>
+            <Table id="tablaVuelos"
+                items="{
+                    path: '/Flights',
+                    sorter: { path: 'Fldate' }
+                }"
+                growing="true"
+                growingThreshold="15"
+                core:require="{ DateTime: 'sap/ui/model/odata/type/DateTime' }">
+                <headerToolbar>
+                    <OverflowToolbar>
+                        <Title text="Vuelos"/>
+                    </OverflowToolbar>
+                </headerToolbar>
+                <columns>
+                    <Column><Text text="{/#Flight/Carrid/@sap:label}"/></Column>
+                    <Column><Text text="{/#Flight/Connid/@sap:label}"/></Column>
+                    <Column><Text text="{/#Flight/Fldate/@sap:label}"/></Column>
+                    <Column hAlign="End"><Text text="{/#Flight/Price/@sap:label}"/></Column>
+                    <Column hAlign="End"><Text text="Plazas"/></Column>
+                </columns>
+                <items>
+                    <ColumnListItem>
+                        <cells>
+                            <ObjectIdentifier title="{Carrid}"/>
+                            <Text text="{Connid}"/>
+                            <Text text="{ path: 'Fldate', type: 'DateTime', formatOptions: { style: 'medium', UTC: true }, constraints: { displayFormat: 'Date' } }"/>
+                            <ObjectNumber number="{Price}" unit="{Currency}"/>
+                            <Text text="{Seatsocc} / {Seatsmax}"/>
+                        </cells>
+                    </ColumnListItem>
+                </items>
+            </Table>
+        </content>
+    </Page>
+</mvc:View>`, "webapp/view/Main.view.xml"),
+          "Ejecuta. Baja hasta el final de la tabla: con <code>growing</code> se cargan 15 filas y el botón <b>Más</b> pide las siguientes al servidor. En la consola verás que no hay errores; en un sistema real verías las peticiones en la pestaña Red del navegador (por ejemplo <code>Flights?$skip=0&amp;$top=15&amp;$orderby=Fldate</code>).",
+          terms([
+            ["items=\"{/Flights}\"", "Ruta del EntitySet. El ODataModel traduce el binding a una petición GET al servicio."],
+            ["growing / growingThreshold", "Paginación: pide los datos de 15 en 15 ($top y $skip). Fundamental con muchos datos."],
+            ["sorter en el binding", "Con OData se ordena en el servidor: genera $orderby=Fldate."],
+            ["sap/ui/model/odata/type/DateTime", "Tipo para Edm.DateTime. UTC: true evita que la fecha cambie de día por la zona horaria."],
+            ["{/#Flight/Carrid/@sap:label}", "Binding al metadata: la etiqueta de la columna viene del servicio (la definió el desarrollador ABAP), así se traduce en el back-end."],
+          ]),
+        ],
+        check: () => !!uP("zflight") && has("zflight", "webapp/view/Main.view.xml", /\/Flights/) && ctl("zflight", "sap.m.ColumnListItem") >= 10 && okRun("zflight"),
+        hint: "Crea zflight con la plantilla OData y muestra la tabla de /Flights.",
+      },
+      {
+        id: "u6s2",
+        title: "Filtros en el servidor, $expand y navegación",
+        body: [
+          "Añade al OverflowToolbar un selector de aerolínea:",
+          file(`                        <ToolbarSpacer/>
+                        <Select id="selAerolinea" forceSelection="false" change=".onAerolineaChange"
+                            items="{ path: '/Carriers', sorter: { path: 'Carrname' } }">
+                            <core:Item key="{Carrid}" text="{Carrname}"/>
+                        </Select>`, "webapp/view/Main.view.xml"),
+          "Después de la tabla, una lista de conexiones de Lufthansa leídas a través de la navegación, con sus vuelos expandidos:",
+          file(`            <List id="listaConexiones" headerText="Conexiones de Lufthansa"
+                items="{
+                    path: '/Carriers(\\'LH\\')/ToConnections',
+                    parameters: { expand: 'ToFlights' }
+                }">
+                <StandardListItem title="{Connid}: {Cityfrom} - {Cityto}"
+                    description="Salida {path: 'Deptime', type: 'sap.ui.model.odata.type.Time'}"
+                    counter="{= \${ToFlights}.length }"/>
+            </List>`, "webapp/view/Main.view.xml"),
+          "En el controlador:",
+          file(`sap.ui.define([
+    "sap/ui/core/mvc/Controller",
+    "sap/ui/model/Filter",
+    "sap/ui/model/FilterOperator"
+], (Controller, Filter, FilterOperator) => {
+    "use strict";
+
+    return Controller.extend("zui5.zflight.controller.Main", {
+        onInit() {
+        },
+
+        onAerolineaChange(oEvent) {
+            const sCarrid = oEvent.getParameter("selectedItem").getKey();
+            // con ODataModel el filtro se envía al servidor: $filter=Carrid eq 'LH'
+            this.byId("tablaVuelos").getBinding("items").filter(
+                sCarrid ? [new Filter("Carrid", FilterOperator.EQ, sCarrid)] : []
+            );
+        }
+    });
+});`, "webapp/controller/Main.controller.js"),
+          terms([
+            ["/Carriers('LH')", "Acceso a una entidad por su clave (key predicate). Con varias claves: /Flights(Carrid='LH',Connid='0400',Fldate=datetime'2026-01-20T00:00:00')."],
+            ["/Carriers('LH')/ToConnections", "Navegación: las conexiones relacionadas con esa aerolínea (en ABAP equivaldría a un SELECT con WHERE carrid = 'LH')."],
+            ["parameters: { expand: 'ToFlights' }", "$expand: trae los vuelos de cada conexión en la misma petición, evitando una petición por fila (como evitar un SELECT en un LOOP)."],
+            ["parameters: { select: 'Carrid,Connid' }", "$select: pide solo esos campos (menos datos por la red)."],
+            ["FilterOperator.EQ", "El filtro se convierte en $filter=Carrid eq 'LH' y lo ejecuta el back-end."],
+            ["core:Item key / text", "Opciones de un Select o ComboBox creadas por aggregation binding."],
+          ]),
+        ],
+        check: () => has("zflight", "webapp/view/Main.view.xml", /expand/) && has("zflight", "webapp/controller/Main.controller.js", /FilterOperator\.EQ/) && ctl("zflight", "sap.m.StandardListItem") >= 1 && okRun("zflight"),
+        hint: "Añade el filtro por aerolínea y la lista con expand: 'ToFlights'.",
+      },
+      {
+        id: "u6s3",
+        title: "Crear, modificar y borrar (CRUD)",
+        body: [
+          "Vamos a dar de alta clientes (EntitySet Customers). Añade a la vista, después de la lista:",
+          file(`            <Panel headerText="Nuevo cliente" class="sapUiResponsiveMargin" width="auto">
+                <HBox alignItems="End" wrap="Wrap">
+                    <VBox class="sapUiSmallMarginEnd">
+                        <Label text="Nombre" labelFor="inpCliNombre" required="true"/>
+                        <Input id="inpCliNombre" width="14rem"/>
+                    </VBox>
+                    <VBox class="sapUiSmallMarginEnd">
+                        <Label text="Ciudad" labelFor="inpCliCiudad"/>
+                        <Input id="inpCliCiudad" width="12rem"/>
+                    </VBox>
+                    <Button text="Crear cliente" type="Emphasized" press=".onCrearCliente"/>
+                </HBox>
+            </Panel>
+            <List id="listaClientes" headerText="Clientes"
+                items="{ path: '/Customers', sorter: { path: 'Id', descending: true } }"
+                growing="true" growingThreshold="5" mode="Delete" delete=".onBorrarCliente">
+                <StandardListItem title="{Name}" description="{Id} - {City}"/>
+            </List>`, "webapp/view/Main.view.xml"),
+          "En el controlador añade la dependencia <code>\"sap/m/MessageBox\"</code> (y <code>\"sap/m/MessageToast\"</code>) y estos métodos:",
+          file(`        onCrearCliente() {
+            const sNombre = this.byId("inpCliNombre").getValue();
+            if (!sNombre) {
+                MessageBox.error("Indique el nombre del cliente");
+                return;
+            }
+            const oModel = this.getView().getModel();
+            const sId = String(Date.now()).slice(-8);
+            oModel.create("/Customers", {
+                Id: sId,
+                Name: sNombre,
+                City: this.byId("inpCliCiudad").getValue(),
+                Country: "PE",
+                Custtype: "P"
+            }, {
+                success: () => {
+                    MessageToast.show("Cliente " + sId + " creado");
+                    this.byId("inpCliNombre").setValue("");
+                },
+                error: () => MessageBox.error("No se pudo crear el cliente")
+            });
+        },
+
+        onBorrarCliente(oEvent) {
+            const oItem = oEvent.getParameter("listItem");
+            const sPath = oItem.getBindingContext().getPath();   // /Customers('00000001')
+            MessageBox.confirm("¿Borrar el cliente " + oItem.getTitle() + "?", {
+                onClose: (sAccion) => {
+                    if (sAccion === MessageBox.Action.OK) {
+                        this.getView().getModel().remove(sPath, {
+                            success: () => MessageToast.show("Cliente borrado")
+                        });
+                    }
+                }
+            });
+        },`, "webapp/controller/Main.controller.js"),
+          terms([
+            ["oModel.create(ruta, datos, { success, error })", "POST al EntitySet: crea una entidad. En el back-end se ejecuta el método CREATE_ENTITY (SEGW) o la acción de RAP."],
+            ["oModel.update(ruta, datos)", "PUT/MERGE sobre una entidad concreta: /Customers('00000001')."],
+            ["oModel.remove(ruta)", "DELETE de la entidad."],
+            ["oModel.read(ruta, { filters, urlParameters, success })", "Lectura directa sin binding (cuando necesitas los datos en el controlador)."],
+            ["Two-way binding y submitChanges", "Si los campos están enlazados (value=\"{Name}\") los cambios quedan pendientes en el modelo y se envían todos juntos con submitChanges() (en un $batch)."],
+            ["$batch", "El ODataModel V2 agrupa varias operaciones en una sola petición HTTP. El token CSRF (X-CSRF-Token) lo pide y envía el modelo automáticamente."],
+            ["MessageBox.error / confirm", "Diálogos estándar para errores y confirmaciones (MessageToast solo para avisos breves)."],
+            ['mode="Delete"', "La lista muestra un botón de borrar en cada fila y lanza el evento delete."],
+          ]),
+        ],
+        check: () => has("zflight", "webapp/controller/Main.controller.js", /\.create\(\s*"\/Customers"/) && has("zflight", "webapp/controller/Main.controller.js", /\.remove\(/) && okRun("zflight"),
+        hint: "Implementa crear y borrar clientes con create y remove.",
+      },
+    ],
+  },
+  {
+    id: "u7",
+    title: "UI5 Paso 7",
+    subtitle: "Controles propios, extensibilidad, pruebas y despliegue",
+    steps: [
+      {
+        id: "u7s1",
+        title: "Un control propio (custom control)",
+        body: [
+          "Cuando ningún control estándar sirve, se crea uno propio heredando de <code>sap.ui.core.Control</code>. Crea <code>webapp/control/BarraOcupacion.js</code> en zflight:",
+          file(`sap.ui.define([
+    "sap/ui/core/Control"
+], (Control) => {
+    "use strict";
+
+    return Control.extend("zui5.zflight.control.BarraOcupacion", {
+        metadata: {
+            properties: {
+                valor: { type: "float", defaultValue: 0 },
+                maximo: { type: "float", defaultValue: 100 }
+            },
+            events: {
+                press: {}
+            }
+        },
+
+        renderer: {
+            apiVersion: 2,
+            render(oRm, oControl) {
+                const fMax = oControl.getMaximo() || 1;
+                const iPorc = Math.min(100, Math.round(oControl.getValor() * 100 / fMax));
+                const sColor = iPorc > 90 ? "#bb0000" : iPorc > 70 ? "#e9730c" : "#2b7d2b";
+                oRm.openStart("div", oControl);
+                oRm.class("zBarra");
+                oRm.attr("title", iPorc + " % ocupado");
+                oRm.openEnd();
+                oRm.openStart("div");
+                oRm.class("zBarraRelleno");
+                oRm.style("width", iPorc + "%");
+                oRm.style("background", sColor);
+                oRm.openEnd();
+                oRm.close("div");
+                oRm.close("div");
+            }
+        },
+
+        onclick() {
+            this.firePress();
+        }
+    });
+});`, "webapp/control/BarraOcupacion.js"),
+          "En <code>css/style.css</code>:",
+          file(`.zBarra { width: 8rem; height: 0.6rem; background: #e5e5e5; border-radius: 0.3rem; overflow: hidden; display: inline-block; }
+.zBarraRelleno { height: 100%; }`, "webapp/css/style.css"),
+          "En la vista declara el namespace <code>xmlns:z=\"zui5.zflight.control\"</code> en mvc:View y usa el control en la celda de Plazas de la tabla:",
+          file(`                            <VBox>
+                                <Text text="{Seatsocc} / {Seatsmax}"/>
+                                <z:BarraOcupacion valor="{Seatsocc}" maximo="{Seatsmax}"/>
+                            </VBox>`, "webapp/view/Main.view.xml"),
+          terms([
+            ["metadata.properties", "Propiedades del control con tipo y valor por defecto: UI5 genera automáticamente getValor(), setValor() y permite el binding."],
+            ["metadata.events", "Eventos que el control puede lanzar (firePress)."],
+            ["renderer apiVersion 2", "Genera el HTML con el RenderManager (openStart, class, style, openEnd, close). apiVersion 2 permite actualizaciones del DOM más eficientes."],
+            ["oRm.openStart(\"div\", oControl)", "El elemento raíz debe recibir el control para que tenga su id y UI5 lo pueda encontrar."],
+            ["xmlns:z=\"zui5.zflight.control\"", "El namespace XML apunta a la carpeta del control; la etiqueta es el nombre de la clase."],
+          ]),
+        ],
+        check: () => !!uF("zflight", "webapp/control/BarraOcupacion.js") && ctl("zflight", "zui5.zflight.control.BarraOcupacion") >= 1 && okRun("zflight"),
+        hint: "Crea el control BarraOcupacion y úsalo en la tabla.",
+      },
+      {
+        id: "u7s2",
+        title: "Extensibilidad de aplicaciones",
+        body: [
+          "Las aplicaciones estándar de SAP no se modifican: se <b>extienden</b>, para que una actualización no borre los cambios (igual que no se modifican programas estándar en ABAP). Opciones:",
+          terms([
+            ["Adaptación por el usuario clave (key user)", "Desde el launchpad (Adaptar interfaz de usuario): ocultar, mover o renombrar campos sin código. Requiere flexEnabled: true en el manifest."],
+            ["Proyecto de adaptación (adaptation project)", "En BAS se crea un proyecto que guarda solo las diferencias (cambios en vistas, fragments añadidos, extensiones de controlador) sobre la aplicación original."],
+            ["Puntos de extensión (ExtensionPoint)", "Lugares previstos en la vista original (core:ExtensionPoint) donde la extensión puede insertar un fragment."],
+            ["Extensión de controlador (ControllerExtension)", "Añade o sustituye métodos del controlador original (override.onInit, métodos nuevos)."],
+            ["Fiori elements: flexible programming model", "En aplicaciones generadas se añaden secciones, columnas y acciones propias mediante el manifest y building blocks."],
+            ["Variantes y personalización", "El usuario final guarda sus propias vistas (filtros, columnas): son variantes, no cambios de la aplicación."],
+          ], "Técnicas de extensión"),
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+      {
+        id: "u7s3",
+        title: "Pruebas unitarias con QUnit",
+        body: [
+          "En zflight crea <code>webapp/model/formatter.js</code>:",
+          file(`sap.ui.define([], () => {
+    "use strict";
+
+    return {
+        ocupacion(iOcupadas, iMaximo) {
+            if (!iMaximo) {
+                return "";
+            }
+            return Math.round(iOcupadas * 100 / iMaximo) + " %";
+        }
+    };
+});`, "webapp/model/formatter.js"),
+          "La prueba <code>webapp/test/unit/formatter.test.js</code>:",
+          file(`sap.ui.define([
+    "zui5/zflight/model/formatter"
+], (formatter) => {
+    "use strict";
+
+    QUnit.module("formatter.ocupacion");
+
+    QUnit.test("calcula el porcentaje redondeado", (assert) => {
+        assert.strictEqual(formatter.ocupacion(120, 160), "75 %", "120 de 160 es 75 %");
+        assert.strictEqual(formatter.ocupacion(1, 3), "33 %", "redondea hacia abajo");
+    });
+
+    QUnit.test("sin capacidad devuelve texto vacío", (assert) => {
+        assert.strictEqual(formatter.ocupacion(10, 0), "", "evita dividir entre cero");
+    });
+});`, "webapp/test/unit/formatter.test.js"),
+          "Y la página que ejecuta las pruebas <code>webapp/test/unit/unitTests.qunit.html</code>:",
+          file(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Pruebas unitarias - zflight</title>
+    <link rel="stylesheet" href="../../resources/sap/ui/thirdparty/qunit-2.css">
+    <script src="../../resources/sap/ui/thirdparty/qunit-2.js"></script>
+    <script
+        id="sap-ui-bootstrap"
+        src="../../resources/sap-ui-core.js"
+        data-sap-ui-resource-roots='{ "zui5.zflight": "../../" }'
+        data-sap-ui-async="true"></script>
+    <script>
+        QUnit.config.autostart = false;
+        sap.ui.require(["zui5/zflight/test/unit/formatter.test"], () => QUnit.start());
+    </script>
+</head>
+<body>
+    <div id="qunit"></div>
+    <div id="qunit-fixture"></div>
+</body>
+</html>`, "webapp/test/unit/unitTests.qunit.html"),
+          "Abre <code>unitTests.qunit.html</code> en el editor y pulsa <b>Ejecutar este HTML</b>. Verás el informe de QUnit en verde. Cambia el formatter para que falle y observa el resultado en rojo.",
+          terms([
+            ["QUnit", "Framework de pruebas unitarias de JavaScript que usa SAPUI5: prueba funciones aisladas (formatters, cálculos) igual que ABAP Unit."],
+            ["QUnit.module / QUnit.test", "Agrupan y definen las pruebas."],
+            ["assert.strictEqual(obtenido, esperado, mensaje)", "La aserción: como cl_abap_unit_assert=>assert_equals."],
+            ["OPA5", "Pruebas de integración: simulan al usuario (pulsar, escribir) y comprueban la pantalla. Se escriben en test/integration con Given / When / Then."],
+            ["wdi5 / UIVeri5", "Pruebas de extremo a extremo (end-to-end) en un navegador real."],
+          ]),
+        ],
+        check: () => (store.data.ui5Tests?.zflight?.passed || 0) >= 3 && store.data.ui5Tests.zflight.failed === 0,
+        hint: "Ejecuta unitTests.qunit.html con las 3 aserciones en verde.",
+      },
+      {
+        id: "u7s4",
+        title: "Build y despliegue",
+        body: [
+          "Antes de desplegar se ejecuta el <b>build</b>: <code>npm run build</code> (ui5 build). En ZUI5 pulsa <b>Build (ui5 build)</b>: se genera la carpeta <code>dist/</code> con <code>Component-preload.js</code>, un único archivo con todas las vistas, controladores y textos, para que el navegador no haga una petición por archivo.",
+          terms([
+            ["Despliegue a un sistema ABAP", "<code>npx fiori deploy</code> (configurado en ui5-deploy.yaml: url, mandante, nombre de la aplicación BSP, paquete y orden de transporte). La aplicación queda como aplicación BSP en el repositorio ABAP y viaja a QAS y PRD con la orden de transporte. Alternativa clásica: el report /UI5/UI5_REPOSITORY_LOAD."],
+            ["Después del despliegue", "Recalcular el índice de aplicaciones (/UI5/APP_INDEX_CALCULATE) y comprobar el nodo SICF /sap/bc/ui5_ui5/sap/&lt;app&gt;."],
+            ["Despliegue a SAP BTP (Cloud Foundry)", "Con un archivo mta.yaml se construye un archivo .mtar que se despliega en el HTML5 Application Repository; el acceso al back-end se hace con destinations y el approuter administrado."],
+            ["Versionado", "applicationVersion del manifest y control de versiones con git (BAS lo integra)."],
+            ["Caché", "El launchpad usa el índice de aplicaciones y el cache buster para que los usuarios reciban la versión nueva."],
+          ], "Despliegue"),
+        ],
+        check: () => !!uF("zflight", "dist/Component-preload.js") || !!uF(P, "dist/Component-preload.js"),
+        hint: "Pulsa Build (ui5 build) en zflight o zvuelos.",
+      },
+    ],
+  },
 ];
