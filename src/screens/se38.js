@@ -248,6 +248,10 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     if (!silent) app.status(`Se ha grabado ${isInc() ? "el include" : "el programa"} ${n} (inactivo)`, "S");
     return true;
   };
+  const saveBusy = () => {
+    if (mode !== "change") return app.status("Cambie a modo modificar (Ctrl+F1) para grabar", "W");
+    return app.busy(`Grabando ${n}...`, () => save(false), 250);
+  };
 
   const openObject = async (obj, line, errors) => {
     if (obj === n) {
@@ -314,10 +318,9 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     return { errors: res.errors.filter((e) => e.obj !== "ZZ_CHECK"), main: null };
   };
 
-  const doCheck = async () => {
+  const doCheck = async (inner) => {
     save(true);
-    app.status("Verificando...", "I");
-    await new Promise((r) => setTimeout(r, 10));
+    if (!inner) return app.busy(`Verificando sintaxis de ${n}...`, () => doCheck(true));
     const { errors, main } = runCheck();
     await showErrors(errors);
     const what = isInc() ? `El include ${n}` : `El programa ${n}`;
@@ -326,9 +329,10 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     return errors.length === 0;
   };
 
-  const activate = async () => {
+  const activate = async (inner) => {
+    if (inner !== true) return app.busy(`Activando ${n}: verificando y generando...`, () => activate(true), 550);
     if (mode === "change") save(true);
-    const ok = await doCheck();
+    const ok = await doCheck(true);
     if (!ok) {
       app.status(`No se pudo activar: ${isInc() ? "el include" : "el programa"} ${n} tiene errores de sintaxis`, "E");
       return false;
@@ -384,6 +388,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       if (!r) return;
       if (r === "act" && !(await activate())) return;
     }
+    await app.busy(`Generando programa ${n}...`, async () => {}, 300);
     runProgram(app, n, {
       onSyntax: (errors) => showErrors(errors),
     });
@@ -404,8 +409,9 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     openObject(inc, 1);
   };
 
-  const pretty = async () => {
+  const pretty = async (inner) => {
     if (mode !== "change") return app.status("Cambie a modo modificar (Ctrl+F1)", "W");
+    if (inner !== true) return app.busy("Pretty Printer: formateando el código...", () => pretty(true));
     const { prettyPrint } = await import("../pretty.js");
     try {
       const out = prettyPrint(editor.getValue());
@@ -446,7 +452,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       { icon: "pretty", label: "Pretty Printer", key: "Shift+F1", action: pretty, disabled: mode !== "change" },
       { icon: "text", label: "Elementos de texto", action: () => { const target = isInc() ? store.mainProgramsOf(n)[0] : n; if (!target) return app.status("Los elementos de texto pertenecen al programa principal: incluya primero este include en un programa", "W"); app.push(textElementsScreen(app, target, mode)); } },
     ],
-    keys: { "Ctrl+S": () => save(false) },
+    keys: { "Ctrl+S": () => saveBusy() },
     render(el) {
       headerEl = h("div", { class: "editor-head" });
       const host = h("div", { class: "editor-host" });

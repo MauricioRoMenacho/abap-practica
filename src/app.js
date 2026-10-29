@@ -126,7 +126,7 @@ export class App {
         this.titleEl,
         this.appToolbar,
         h("div", { class: "main" }, this.content, this.guideHost),
-        h("div", { class: "statusbar" }, this.statusMsg, this.statusInfo),
+        (this.statusbar = h("div", { class: "statusbar" }, h("div", { class: "progress-line" }), this.statusMsg, this.statusInfo)),
       ),
     );
     this.updateStatusInfo();
@@ -318,6 +318,24 @@ export class App {
   }
 
   // ---------------- barra de estado ----------------
+  // indicador de proceso en la barra de estado (como el reloj de SAP)
+  async busy(text, fn, minMs = 450) {
+    this.statusMsg.className = "status-msg st-busy";
+    this.statusMsg.replaceChildren(h("span", { class: "spinner" }), h("span", {}, text));
+    this.statusbar.classList.add("working");
+    document.body.classList.add("busy");
+    // dejar que el navegador pinte el indicador antes del trabajo pesado
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise((r) => setTimeout(r, minMs));
+    try {
+      return await fn();
+    } finally {
+      this.statusbar.classList.remove("working");
+      document.body.classList.remove("busy");
+      if (this.statusMsg.classList.contains("st-busy")) this.status("");
+    }
+  }
+
   status(text, type = "S") {
     clearTimeout(this.statusTimer);
     this.statusMsg.className = "status-msg" + (text ? " st-" + type : "");

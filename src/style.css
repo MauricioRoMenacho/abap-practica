@@ -1865,3 +1865,58 @@ table.alv th .ico {
   color: #3d4246;
   font-size: 13px;
 }
+
+/* indicador de proceso (barra de estado) */
+.statusbar {
+  position: relative;
+}
+.progress-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 3px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.statusbar.working .progress-line {
+  opacity: 1;
+}
+.progress-line::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--brand), transparent);
+  animation: progress-run 1s infinite linear;
+  will-change: transform;
+}
+@keyframes progress-run {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+.status-msg.st-busy {
+  background: #eaf3fc;
+  color: var(--brand-d);
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #b9d4ef;
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex: none;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

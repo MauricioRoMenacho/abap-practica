@@ -39,12 +39,29 @@ export async function runProgram(app, name, opts = {}) {
   };
 
   app.status("");
+  app.statusMsg.className = "status-msg st-busy";
+  app.statusMsg.replaceChildren(h("span", { class: "spinner" }), h("span", {}, `Ejecutando ${name}...`));
+  app.statusbar.classList.add("working");
   document.body.classList.add("busy");
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   let res;
+  const stopBusy = () => {
+    document.body.classList.remove("busy");
+    app.statusbar.classList.remove("working");
+    if (app.statusMsg.classList.contains("st-busy")) app.status("");
+  };
+  // la barra de progreso se detiene mientras el programa espera al usuario
+  for (const k of ["selectionScreen", "alv", "popup"]) {
+    const orig = ui[k];
+    ui[k] = (...a) => {
+      stopBusy();
+      return orig(...a);
+    };
+  }
   try {
     res = await app.engine.run({ name, source: p.activeSource }, ctx, ui);
   } finally {
-    document.body.classList.remove("busy");
+    stopBusy();
   }
   if (session.selScreen?.lastValues) selMemory[name] = session.selScreen.lastValues;
 

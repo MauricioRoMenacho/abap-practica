@@ -172,8 +172,9 @@ function tableScreen(app, n, initialMode, isNew) {
     app.status(`La tabla ${n} es correcta`, "S");
     return true;
   };
-  const activate = async () => {
+  const activate = async (inner) => {
     if (standard) return app.status("La tabla ya está activa", "S");
+    if (inner !== true) return app.busy(`Activando tabla ${n}: ajustando la base de datos...`, () => activate(true), 550);
     if (mode === "change") save(true);
     if (!check()) return;
     const t = store.table(n);
@@ -345,12 +346,12 @@ function tableScreen(app, n, initialMode, isNew) {
     toolbar: () => [
       { icon: mode === "change" ? "display" : "change", tip: "Visualizar ↔ Modificar", key: "Ctrl+F1", action: toggle },
       "-",
-      { icon: "check", label: "Verificar", key: "Ctrl+F2", action: check },
+      { icon: "check", label: "Verificar", key: "Ctrl+F2", action: () => app.busy(`Verificando tabla ${n}...`, () => check(), 350) },
       { icon: "activate", label: "Activar", key: "Ctrl+F3", action: activate, primary: !standard },
       "-",
       { icon: "table", label: "Contenido", tip: "Contenido de la tabla (SE16)", action: content },
     ],
-    keys: { "Ctrl+S": () => save(false) },
+    keys: { "Ctrl+S": () => (standard || mode !== "change" ? app.status("Nada que grabar", "W") : app.busy(`Grabando tabla ${n}...`, () => save(false), 250)) },
     render(el) {
       headEl = h("div", { class: "editor-head" });
       body = h("div", { class: "panel wide" });
