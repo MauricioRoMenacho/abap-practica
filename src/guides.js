@@ -2611,5 +2611,18 @@ export function guidePanel(app, host) {
 
   store.onChange(() => render());
   render();
-  return { render };
+  // abrir la guía en un paso y ejercicio concretos (por ejemplo desde la página inicial)
+  const goto = (guideId, stepId) => {
+    if (!GUIDES.some((x) => x.id === guideId)) return;
+    const g0 = host.querySelector(".guide");
+    if (g0) localStorage.setItem("abapp.guideScroll." + current, String(g0.scrollTop));
+    current = guideId;
+    localStorage.setItem("abapp.guideTab", current);
+    setOpenStep(stepId || null);
+    savedScroll = 0;
+    host.replaceChildren();
+    render();
+    setTimeout(() => host.querySelector(".step.open")?.scrollIntoView({ block: "start" }), 50);
+  };
+  return { render, goto };
 }
