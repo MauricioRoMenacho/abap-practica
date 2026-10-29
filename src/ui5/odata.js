@@ -154,3 +154,83 @@ export function jsonFlights(engine) {
   }));
   return { carriers, flights };
 }
+
+// Anotaciones locales (vocabulario UI) para smart controls y SAP Fiori elements.
+// En un proyecto real suelen venir del back-end (CDS @UI...) y se complementan con este archivo.
+export function annotationsXml() {
+  const df = (p, label) => `       <Record Type="UI.DataField"><PropertyValue Property="Value" Path="${p}"/>${label ? `<PropertyValue Property="Label" String="${label}"/>` : ""}</Record>`;
+  const pp = (p) => `       <PropertyPath>${p}</PropertyPath>`;
+  return `<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+ <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/UI.xml">
+  <edmx:Include Namespace="com.sap.vocabularies.UI.v1" Alias="UI"/>
+ </edmx:Reference>
+ <edmx:Reference Uri="${SERVICE_URL}$metadata">
+  <edmx:Include Namespace="ZFLIGHT_SRV" Alias="SAP"/>
+ </edmx:Reference>
+ <edmx:DataServices>
+  <Schema Namespace="zui5.annotations" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+
+   <!-- Conexiones: lista (List Report) y página de objeto (Object Page) -->
+   <Annotations Target="ZFLIGHT_SRV.Connection">
+    <Annotation Term="UI.SelectionFields">
+     <Collection>
+${["Carrid", "Cityfrom", "Cityto"].map(pp).join("\n")}
+     </Collection>
+    </Annotation>
+    <Annotation Term="UI.LineItem">
+     <Collection>
+${[df("Carrid"), df("Connid"), df("Cityfrom"), df("Cityto"), df("Deptime"), df("Fltime", "Duración (min)")].join("\n")}
+     </Collection>
+    </Annotation>
+    <Annotation Term="UI.HeaderInfo">
+     <Record Type="UI.HeaderInfoType">
+      <PropertyValue Property="TypeName" String="Conexión"/>
+      <PropertyValue Property="TypeNamePlural" String="Conexiones"/>
+      <PropertyValue Property="Title"><Record Type="UI.DataField"><PropertyValue Property="Value" Path="Connid"/></Record></PropertyValue>
+      <PropertyValue Property="Description"><Record Type="UI.DataField"><PropertyValue Property="Value" Path="Cityto"/></Record></PropertyValue>
+     </Record>
+    </Annotation>
+    <Annotation Term="UI.FieldGroup" Qualifier="Ruta">
+     <Record Type="UI.FieldGroupType">
+      <PropertyValue Property="Data">
+       <Collection>
+${[df("Cityfrom"), df("Airpfrom"), df("Cityto"), df("Airpto"), df("Deptime"), df("Arrtime"), df("Distance")].map((x) => "  " + x).join("\n")}
+       </Collection>
+      </PropertyValue>
+     </Record>
+    </Annotation>
+    <Annotation Term="UI.Facets">
+     <Collection>
+      <Record Type="UI.ReferenceFacet">
+       <PropertyValue Property="ID" String="Ruta"/>
+       <PropertyValue Property="Label" String="Ruta"/>
+       <PropertyValue Property="Target" AnnotationPath="@UI.FieldGroup#Ruta"/>
+      </Record>
+      <Record Type="UI.ReferenceFacet">
+       <PropertyValue Property="ID" String="Vuelos"/>
+       <PropertyValue Property="Label" String="Vuelos"/>
+       <PropertyValue Property="Target" AnnotationPath="ToFlights/@UI.LineItem"/>
+      </Record>
+     </Collection>
+    </Annotation>
+   </Annotations>
+
+   <!-- Vuelos: columnas de la tabla (SmartTable / facet de vuelos) y filtros (SmartFilterBar) -->
+   <Annotations Target="ZFLIGHT_SRV.Flight">
+    <Annotation Term="UI.SelectionFields">
+     <Collection>
+${["Carrid", "Connid", "Fldate"].map(pp).join("\n")}
+     </Collection>
+    </Annotation>
+    <Annotation Term="UI.LineItem">
+     <Collection>
+${[df("Carrid"), df("Connid"), df("Fldate"), df("Price"), df("Seatsmax", "Capacidad"), df("Seatsocc", "Ocupados")].join("\n")}
+     </Collection>
+    </Annotation>
+   </Annotations>
+  </Schema>
+ </edmx:DataServices>
+</edmx:Edmx>
+`;
+}
