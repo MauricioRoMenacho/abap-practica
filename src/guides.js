@@ -1898,6 +1898,183 @@ WRITE: / 'Vuelos:', gv_total.`),
       },
     ],
   },
+  {
+    id: "p7",
+    title: "Paso 7",
+    subtitle: "Avanzado: clases globales, listas interactivas y depuración",
+    steps: [
+      {
+        id: "p7s1",
+        title: "Clase global en SE24",
+        body: [
+          "En el Paso 4 creaste clases <b>locales</b> (lcl_), que solo existen dentro de su programa. Una clase <b>global</b> se crea en <b>SE24</b> y la puede usar cualquier programa, módulo de función u otra clase: es la forma de compartir lógica en proyectos reales.",
+          "1. Abre <b>SE24</b>, escribe <code>ZCL_VUELOS</code> y pulsa <b>Crear</b> (descripción: Lectura de vuelos).<br>2. En <b>Código fuente</b> reemplaza todo por:",
+          code(`CLASS zcl_vuelos DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC.
+
+  PUBLIC SECTION.
+    TYPES tt_vuelos TYPE STANDARD TABLE OF sflight WITH DEFAULT KEY.
+
+    METHODS constructor
+      IMPORTING iv_carrid TYPE sflight-carrid.
+    METHODS leer
+      RETURNING VALUE(rt_vuelos) TYPE tt_vuelos.
+    METHODS ocupacion_media
+      RETURNING VALUE(rv_porc) TYPE i.
+    CLASS-METHODS existe
+      IMPORTING iv_carrid       TYPE sflight-carrid
+      RETURNING VALUE(rv_existe) TYPE abap_bool.
+
+  PRIVATE SECTION.
+    DATA mv_carrid TYPE sflight-carrid.
+ENDCLASS.
+
+
+CLASS zcl_vuelos IMPLEMENTATION.
+
+  METHOD constructor.
+    mv_carrid = iv_carrid.
+  ENDMETHOD.
+
+  METHOD leer.
+    SELECT * FROM sflight WHERE carrid = @mv_carrid INTO TABLE @rt_vuelos.
+  ENDMETHOD.
+
+  METHOD ocupacion_media.
+    DATA lv_suma TYPE i.
+    DATA(lt_vuelos) = leer( ).
+    IF lt_vuelos IS INITIAL.
+      RETURN.
+    ENDIF.
+    LOOP AT lt_vuelos INTO DATA(ls_vuelo).
+      lv_suma = lv_suma + ls_vuelo-seatsocc * 100 / ls_vuelo-seatsmax.
+    ENDLOOP.
+    rv_porc = lv_suma / lines( lt_vuelos ).
+  ENDMETHOD.
+
+  METHOD existe.
+    SELECT SINGLE carrid FROM scarr WHERE carrid = @iv_carrid INTO @DATA(lv_carrid).
+    rv_existe = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+ENDCLASS.`),
+          "3. <b>Activar</b> (Ctrl+F3). Mira la pestaña <b>Componentes</b>: verás qué es público/privado y estático/instancia.<br>4. Úsala desde un programa <code>ZP7_GLOBAL</code>:",
+          code(`REPORT zp7_global.
+
+PARAMETERS p_carr TYPE sflight-carrid DEFAULT 'LH'.
+
+START-OF-SELECTION.
+  IF zcl_vuelos=>existe( p_carr ) = abap_false.
+    MESSAGE |La aerolínea { p_carr } no existe| TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  DATA(lo_vuelos) = NEW zcl_vuelos( p_carr ).
+  WRITE: / 'Vuelos de', p_carr, ':', lines( lo_vuelos->leer( ) ),
+         / 'Ocupación media:', lo_vuelos->ocupacion_media( ), '%'.`),
+          syntax([
+            ["CLASS zcl_... DEFINITION PUBLIC", "PUBLIC hace que la clase sea global: visible para todo el sistema. Convención: ZCL_ para clases, ZCX_ para excepciones."],
+            ["FINAL", "Nadie puede heredar de esta clase."],
+            ["CREATE PUBLIC", "Cualquiera puede crear objetos con NEW. (CREATE PRIVATE: solo la propia clase, típico del patrón singleton.)"],
+            ["TYPES tt_vuelos ... (en PUBLIC SECTION)", "Un tipo público de la clase: los programas lo usan como zcl_vuelos=>tt_vuelos."],
+            ["CLASS-METHODS existe", "Método estático: se llama con <code>=&gt;</code> sin crear objeto."],
+            ["zcl_vuelos=>existe( p_carr )", "Llamada a un método estático."],
+            ["NEW zcl_vuelos( p_carr )", "Crea un objeto: se ejecuta el constructor con ese parámetro."],
+            ["lo_vuelos->leer( )", "Llamada a un método de instancia (sobre un objeto)."],
+          ]),
+        ],
+        check: () => !!store.data.classes?.ZCL_VUELOS?.activeSource && run("ZP7_GLOBAL")?.status === "ok" && activeHas("ZP7_GLOBAL", /zcl_vuelos/i),
+        hint: "Activa ZCL_VUELOS en SE24 y ejecuta ZP7_GLOBAL.",
+      },
+      {
+        id: "p7s2",
+        title: "Listas interactivas: AT LINE-SELECTION y HIDE",
+        body: [
+          "Antes del ALV, los reportes clásicos eran <b>listas interactivas</b>: el usuario hace doble clic en una línea y aparece una <b>lista secundaria</b> con el detalle. Todavía las encontrarás en muchos programas antiguos.",
+          "Crea <code>ZP7_INTERACTIVA</code>:",
+          code(`REPORT zp7_interactiva.
+
+DATA gs_carr TYPE scarr.
+
+START-OF-SELECTION.
+  WRITE / 'Aerolíneas (doble clic en una línea para ver sus conexiones)'.
+  ULINE.
+  SELECT * FROM scarr INTO @gs_carr ORDER BY carrid.
+    WRITE: / gs_carr-carrid HOTSPOT, gs_carr-carrname.
+    HIDE gs_carr-carrid.
+  ENDSELECT.
+  CLEAR gs_carr.
+
+AT LINE-SELECTION.
+  CASE sy-lsind.
+    WHEN 1.
+      WRITE: / 'Conexiones de', gs_carr-carrid.
+      ULINE.
+      SELECT connid, cityfrom, cityto FROM spfli
+        WHERE carrid = @gs_carr-carrid
+        INTO TABLE @DATA(lt_con).
+      LOOP AT lt_con INTO DATA(ls_con).
+        WRITE: / ls_con-connid, ls_con-cityfrom, ls_con-cityto.
+      ENDLOOP.
+      IF lt_con IS INITIAL.
+        WRITE / 'Sin conexiones'.
+      ENDIF.
+    WHEN OTHERS.
+      WRITE / 'Línea seleccionada:'.
+      WRITE / sy-lisel.
+  ENDCASE.`),
+          "Ejecuta y haz <b>doble clic</b> en una aerolínea (o selecciónala y pulsa F2). Aparece la lista secundaria nivel 1. Haz doble clic en una conexión: lista nivel 2. Con F3 vuelves a la lista anterior.",
+          syntax([
+            ["AT LINE-SELECTION.", "Evento que se ejecuta cuando el usuario hace doble clic (o F2) en una línea de la lista. Todo lo que se escriba ahí va a una nueva lista secundaria."],
+            ["HIDE gs_carr-carrid.", "Guarda el valor del campo <b>junto con la línea actual</b>. Al seleccionar esa línea, el campo recupera automáticamente ese valor."],
+            ["sy-lsind", "Nivel de la lista que se está creando: 0 = lista básica, 1 = primera lista secundaria, ... (máximo 20)."],
+            ["sy-lisel", "Contenido de la línea seleccionada (texto)."],
+            ["HOTSPOT", "Marca el campo como \"enlace\": en SAP basta un clic. Aquí las líneas con HIDE se resaltan en azul."],
+            ["SELECT ... ENDSELECT", "Bucle sobre la base de datos (una fila en cada vuelta). Útil aquí para escribir y hacer HIDE fila a fila; para cálculos es mejor INTO TABLE."],
+            ["CLEAR gs_carr.", "Se limpia al final para que, si el usuario hace doble clic en una línea sin HIDE (el título), el campo no tenga el valor de la última aerolínea."],
+          ]),
+        ],
+        check: () => run("ZP7_INTERACTIVA")?.status === "ok" && activeHas("ZP7_INTERACTIVA", /AT\s+LINE-SELECTION/i) && activeHas("ZP7_INTERACTIVA", /^\s*HIDE\b/im),
+        hint: "Ejecuta ZP7_INTERACTIVA con AT LINE-SELECTION y HIDE.",
+      },
+      {
+        id: "p7s3",
+        title: "Depuración avanzada: cambiar valores y watchpoints",
+        body: [
+          "Dos técnicas del depurador que ahorran horas: <b>cambiar el valor</b> de una variable para probar otro camino sin tocar el código, y los <b>watchpoints</b>, que detienen el programa justo cuando una variable cambia.",
+          "Crea <code>ZP7_DEBUG</code>:",
+          code(`REPORT zp7_debug.
+
+DATA: lv_contador TYPE i,
+      lv_total    TYPE i,
+      lv_estado   TYPE string VALUE 'NORMAL'.
+
+DO 10 TIMES.
+  lv_contador = lv_contador + 1.
+  lv_total = lv_total + lv_contador.
+  IF lv_total > 30.
+    lv_estado = 'LIMITE SUPERADO'.
+  ENDIF.
+ENDDO.
+
+WRITE: / 'Contador:', lv_contador,
+       / 'Total:   ', lv_total,
+       / 'Estado:  ', lv_estado.`),
+          "1. En el editor pulsa <b>Depurar</b>: el programa se detiene en la primera instrucción.<br>2. Pulsa <b>Watchpoint</b> y elige <code>LV_ESTADO</code>. Pulsa <b>Continuar</b> (F8): el depurador se detiene justo después de la línea que cambió el estado y te dice el valor anterior y el nuevo. Mira cuánto vale LV_TOTAL en ese momento.<br>3. Ahora haz <b>doble clic en el valor</b> de <code>LV_CONTADOR</code>, escribe <code>100</code> y pulsa Enter. Continúa (F8) y observa cómo cambia el resultado final.",
+          syntax([
+            ["Watchpoint", "Condición de parada sobre una variable: el programa se detiene cuando su valor cambia. Ideal para encontrar \"quién modifica este campo\"."],
+            ["Cambiar valor (doble clic)", "Modifica la variable en memoria mientras el programa está detenido. En SAP real requiere autorización de depuración con cambio (en producción casi nunca se tiene)."],
+            ["Punto de parada (clic en el margen)", "Se detiene siempre al llegar a esa línea."],
+            ["F5 / F6 / F8", "Paso a paso (entra en FORMs y métodos) / Ejecutar (sin entrar) / Continuar hasta la siguiente parada."],
+          ]),
+        ],
+        check: () => run("ZP7_DEBUG")?.status === "ok" && !!store.data.debugUsed && activeHas("ZP7_DEBUG", /lv_estado/i),
+        hint: "Depura ZP7_DEBUG usando un watchpoint.",
+      },
+    ],
+  },
 ];
 
 // ---- "Hazlo tú": ejercicios sin código para copiar al final de cada paso ----

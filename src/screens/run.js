@@ -202,7 +202,8 @@ export async function runProgram(app, name, opts = {}) {
       return;
   }
   if (res.list?.length) {
-    app.push(listScreen(app, name, p.title, res.list, () => rerunIfScreen()));
+    const inter = res.lineSelect ? { level: 0, hideLines: res.hideLines, select: (lvl, i, t) => res.lineSelect(lvl, i, t) } : null;
+    app.push(listScreen(app, name, p.title, res.list, () => rerunIfScreen(), inter));
   } else if (session.selScreen && app.current() === session.selScreen) {
     runProgram(app, name, { ...opts, debug: undefined, session });
   } else if (res.status === "ok" && runRecord.alvs.length === 0) {
@@ -531,19 +532,61 @@ function selectionScreen(app, name, title, ctx) {
 }
 
 // ---------------------------------------------------------------- lista (WRITE)
-function listScreen(app, name, title, lines, onBack) {
+function listScreen(app, name, title, lines, onBack, inter) {
+  let selected = -1;
+  let pre;
+  const choose = async (i) => {
+    if (!inter) return app.status("Este programa no tiene AT LINE-SELECTION: la lista no es interactiva", "I");
+    if (i < 0) return app.status("Sitúe el cursor en una línea (clic) y pulse F2 o haga doble clic", "W");
+    const r = await app.busy("Procesando la línea seleccionada (AT LINE-SELECTION)...", () => inter.select(inter.level, i, lines[i]), 200);
+    if (r.status === "dump") return app.push(dumpScreen(app, name, r.dump, () => false));
+    if (r.status === "message") {
+      app.status(r.text, r.displayLike || r.type);
+      if (!r.list.length) return;
+    }
+    if (!r.list.length) return app.status("La selección no generó ninguna lista secundaria", "I");
+    const sub = { level: r.level, hideLines: r.hideLines, select: inter.select };
+    app.push(listScreen(app, name, `${title} - lista secundaria ${r.level}`, r.list, () => false, sub));
+    app.status(`Lista secundaria nivel ${r.level} (sy-lsind = ${r.level}). F3 vuelve a la lista anterior.`, "S");
+  };
   return {
     id: "LIST",
     tcode: "SE38",
     title: () => title,
     toolbar: () => [
+      inter ? { icon: "detail", label: "Seleccionar", key: "F2", tip: "Seleccionar la línea (AT LINE-SELECTION)", action: () => choose(selected) } : null,
       { icon: "print", label: "Imprimir / PDF", action: () => window.print() },
       { icon: "download", label: "Fichero local", tip: "Guardar la lista como .txt", action: () => download(`${name}.txt`, lines.join("\n")) },
-    ],
+    ].filter(Boolean),
     render(el) {
       const d = new Date();
       const header = `${title}`.padEnd(70) + d.toLocaleDateString("es-PE") + "   1";
-      el.append(h("div", { class: "list-wrap" }, h("pre", { class: "list-out" }, h("span", { class: "list-head" }, header + "\n" + "-".repeat(Math.max(header.length, 80)) + "\n"), lines.join("\n"))));
+      pre = h(
+        "pre",
+        { class: "list-out" + (inter ? " interactive" : "") },
+        h("span", { class: "list-head" }, header + "\n" + "-".repeat(Math.max(header.length, 80)) + "\n"),
+        lines.map((l, i) =>
+          h(
+            "span",
+            {
+              class: "list-line" + (inter?.hideLines?.has(i) ? " hot" : ""),
+              onclick: inter
+                ? (e) => {
+                    selected = i;
+                    pre.querySelectorAll(".list-line.sel").forEach((x) => x.classList.remove("sel"));
+                    e.currentTarget.classList.add("sel");
+                    if (e.currentTarget.classList.contains("hot") && e.target.closest(".list-line")) {
+                      /* un clic selecciona; doble clic (o F2) procesa */
+                    }
+                  }
+                : undefined,
+              ondblclick: inter ? () => choose(i) : undefined,
+            },
+            l + "\n",
+          ),
+        ),
+      );
+      el.append(h("div", { class: "list-wrap" }, pre));
     },
     async onBack() {
       app.stack.pop();

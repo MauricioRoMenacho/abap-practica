@@ -680,6 +680,10 @@ export function repoContext(fmOverride) {
   for (const mc of Object.values(allMsgClasses())) extraFiles.push({ filename: mc.name.toLowerCase() + ".msag.xml", contents: msagXml(mc) });
   extraFiles.push(...ddicExtraFiles());
   extraFiles.push(...userFugrFiles(fmOverride));
+  for (const c of Object.values(store.data.classes || {})) {
+    const src = fmOverride?.classOverride?.name === c.name ? fmOverride.classOverride.source : c.activeSource;
+    if (src) extraFiles.push({ filename: c.name.toLowerCase() + ".clas.abap", contents: src });
+  }
   return { extraFiles, msgTexts: msgTexts(lang) };
 }
 

@@ -144,6 +144,20 @@ export function preprocess(source, progName, texts = {}, opts = {}) {
       closeOpenForm(st);
     }
 
+    // HIDE: guarda valores de la línea actual de la lista (listas interactivas)
+    if (g instanceof S.Hide) {
+      const names = toks.slice(1).map((t) => t.str).filter((x) => x !== "," && x !== "." && x !== ":");
+      const js = names
+        .filter((n) => /^[A-Za-z_][\w]*(-[A-Za-z_]\w*)*$/.test(n))
+        .map((n) => {
+          const parts = n.toLowerCase().split("-");
+          return `[${JSON.stringify(n.toUpperCase())}, ${parts[0]}${parts.slice(1).map((x) => `.get().${x}`).join("")}]`;
+        })
+        .join(", ");
+      replaceTokenRange(st, `WRITE '@KERNEL globalThis.__abapHide([${js}]);'.`);
+      continue;
+    }
+
     if (g instanceof S.StartOfSelection) {
       if (!markerAt) markerAt = st;
       blankStatement(st);

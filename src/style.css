@@ -2593,3 +2593,15 @@ body.guide-window {
 .unit-ok { color: #1e6b33; }
 .unit-fail { color: #bb0000; font-weight: 600; }
 .unit-err { color: #b55a00; font-weight: 600; }
+
+/* listas interactivas */
+.list-out .list-line { display: inline; }
+.list-out.interactive .list-line { cursor: default; }
+.list-out.interactive .list-line.hot { color: #0a4fa0; cursor: pointer; }
+.list-out.interactive .list-line.hot:hover { text-decoration: underline; }
+.list-out.interactive .list-line.sel { background: #cfe3f8; }
+.dbg-vars td.val.editable { cursor: text; }
+.dbg-vars td.val.editable:hover { outline: 1px dashed #0a6ed1; }
+.dbg-edit { width: 100%; box-sizing: border-box; }
+.dbg-watch { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
+.dbg-watch-tag { margin-left: 6px; font-size: 10px; background: #e9730c; color: #fff; border-radius: 3px; padding: 0 4px; }

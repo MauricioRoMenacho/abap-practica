@@ -373,7 +373,7 @@ export class Engine {
     const prog = objs.find((o) => o.object.type === "PROG");
     const others = objs.filter((o) => o !== prog);
     const byName = new Map(others.map((o) => [o.object.name.toUpperCase(), o]));
-    const sources = new Map(this.libFiles.map((f) => [f.filename.split(".")[0].toUpperCase(), f.contents]));
+    const sources = new Map([...this.libFiles, ...(ctx.extraFiles || [])].map((f) => [f.filename.split(".")[0].toUpperCase(), f.contents]));
     const done = new Set();
     const ordered = [];
     const visit = (o) => {
@@ -539,6 +539,9 @@ export class Engine {
     setSy("sysid", 3, "NPL");
     setSy("tcode", 20, "SE38");
     setSy("host", 32, "practica-abap");
+    for (const f of ["lsind", "lilli", "staro"]) if (!sy[f]) sy[f] = new abap.types.Integer();
+    setSy("lisel", 255, "");
+    setSy("ucomm", 70, "");
 
     // el mandante se rellena automáticamente, como en SAP
     const fillMandt = (opts) => {
@@ -557,7 +560,16 @@ export class Engine {
       };
     }
 
-    const list = new ListOutput(abap);
+    let list = new ListOutput(abap);
+    // listas interactivas: valores HIDE por nivel de lista y línea
+    const hides = {};
+    let listLevel = 0;
+    globalThis.__abapHide = (entries) => {
+      const line = list.out.length + (list.cur !== null ? 0 : 0);
+      const lvl = (hides[listLevel] ||= {});
+      const arr = (lvl[line] ||= []);
+      for (const [n, ref] of entries) arr.push({ n, ref, value: ref.clone ? ref.clone() : ref.get() });
+    };
     const origWrite = abap.statements.write.bind(abap.statements);
     abap.statements.write = (source, options) => {
       if (options?.target) return origWrite(source, options);
@@ -722,31 +734,89 @@ export class Engine {
       const bps = ctx.debug.breakpoints || new Set();
       let mode = ctx.debug.startStep ? "step" : "run";
       let overScope = null;
+      // watchpoints: nombre -> último valor conocido
+      const watches = new Map();
+      const resolveVar = (v, ev) => {
+        const tries = [v.js];
+        if (/^[a-z_][a-z0-9_$]*$/.test(v.js)) tries.push("this." + v.js, "this.constructor." + v.js);
+        for (const expr of tries) {
+          try {
+            const val = ev(expr);
+            if (val !== undefined) return val;
+          } catch {
+            /* probar la siguiente forma */
+          }
+        }
+        return undefined;
+      };
+      const valueKey = (val) => {
+        try {
+          const sn = snapshot(val, abap);
+          return sn.kind === "simple" ? sn.value : JSON.stringify(sn);
+        } catch {
+          return "?";
+        }
+      };
       globalThis.__abapDbg = async (id, ev, forced) => {
         const info = table[id];
         if (!info) return;
         let stop = forced || mode === "step" || bps.has(info.obj + ":" + info.line);
         if (!stop && mode === "over" && (info.scope === overScope || info.scope === "_program")) stop = true;
+        let watchHit = null;
+        if (watches.size) {
+          for (const [wn, last] of watches) {
+            const v = info.vars.find((x) => x.name === wn);
+            if (!v) continue;
+            const val = resolveVar(v, ev);
+            if (val === undefined) continue;
+            const now = valueKey(val);
+            if (last !== undefined && now !== last && !watchHit) watchHit = { name: wn, from: last, to: now };
+            watches.set(wn, now);
+          }
+          if (watchHit) stop = true;
+        }
         if (!stop) return;
         const vars = info.vars.map((v) => {
-          let val;
-          const tries = [v.js];
-          if (/^[a-z_][a-z0-9_$]*$/.test(v.js)) tries.push("this." + v.js, "this.constructor." + v.js);
-          let ok = false;
-          for (const expr of tries) {
-            try {
-              val = ev(expr);
-              if (val !== undefined) {
-                ok = true;
-                break;
-              }
-            } catch {
-              /* probar la siguiente forma */
-            }
-          }
-          if (!ok) return { name: v.name, kind: "na", note: "aún no declarada" };
+          const val = resolveVar(v, ev);
+          if (val === undefined) return { name: v.name, kind: "na", note: "aún no declarada" };
           return { name: v.name, ...snapshot(val, abap) };
         });
+        // cambiar el valor de una variable mientras el programa está detenido
+        const setValue = (name, text) => {
+          const v = info.vars.find((x) => x.name === name);
+          const val = v && resolveVar(v, ev);
+          if (!val || typeof val.set !== "function") return { error: "Esta variable no se puede modificar aquí" };
+          try {
+            const T = abap.types;
+            let x = text;
+            if (val instanceof T.Integer || (T.Integer8 && val instanceof T.Integer8)) {
+              if (!/^-?\d+$/.test(text.trim())) return { error: "Introduzca un número entero" };
+              x = parseInt(text, 10);
+            } else if (val instanceof T.Packed || val instanceof T.Float) {
+              const n = Number(text.trim().replace(",", "."));
+              if (Number.isNaN(n)) return { error: "Introduzca un número (use punto o coma para los decimales)" };
+              x = n;
+            } else if (val instanceof T.Date) {
+              x = text.trim().replace(/^(\d{2})\.(\d{2})\.(\d{4})$/, "$3$2$1");
+              if (!/^\d{8}$/.test(x)) return { error: "Fecha en formato DD.MM.AAAA o AAAAMMDD" };
+            } else if (val instanceof T.Time) {
+              x = text.trim().replace(/:/g, "");
+              if (!/^\d{6}$/.test(x)) return { error: "Hora en formato HH:MM:SS" };
+            } else if (val instanceof T.Structure || val instanceof T.Table || val instanceof T.HashedTable) {
+              return { error: "Solo se pueden modificar campos simples (para una estructura, modifique sus componentes en el código)" };
+            }
+            val.set(x);
+            if (watches.has(name)) watches.set(name, valueKey(val));
+            return { ok: true, var: { name, ...snapshot(val, abap) } };
+          } catch (e) {
+            return { error: "Valor no válido: " + e.message };
+          }
+        };
+        const addWatch = (name) => {
+          const v = info.vars.find((x) => x.name === name);
+          const val = v && resolveVar(v, ev);
+          watches.set(name, val === undefined ? undefined : valueKey(val));
+        };
         const syv = (f) => {
           try {
             return String(sy[f]?.get?.() ?? "").trim();
@@ -758,7 +828,12 @@ export class Engine {
         const action = await ui.debug({
           obj: info.obj,
           line: info.line,
-          reason: forced ? "BREAK-POINT" : mode === "step" || mode === "over" ? "paso" : "punto de parada",
+          reason: watchHit ? `watchpoint: ${watchHit.name} cambió de "${watchHit.from}" a "${watchHit.to}"` : forced ? "BREAK-POINT" : mode === "step" || mode === "over" ? "paso" : "punto de parada",
+          watchHit,
+          setValue,
+          addWatch,
+          removeWatch: (n) => watches.delete(n),
+          watches: () => [...watches.keys()],
           vars,
           sy: { subrc: syv("subrc"), tabix: syv("tabix"), index: syv("index"), dbcnt: syv("dbcnt"), datum: syv("datum"), uname: syv("uname") },
         });
@@ -787,6 +862,51 @@ export class Engine {
       if (e instanceof AbapCancel) result = { status: "cancel" };
       else if (e instanceof AbapMessageStop) result = { status: "message", type: e.msgType, text: e.message, displayLike: e.displayLike };
       else result = { status: "dump", dump: await describeDump(e, abap, comp.unsupported) };
+    }
+    // AT LINE-SELECTION: el programa sigue "vivo" para responder al doble clic en la lista
+    const alsForm = comp.meta?.events?.als ? abap.Forms[`PROG-${program.name.toUpperCase()}-${comp.meta.events.als.toUpperCase()}`] : null;
+    if (alsForm && result.status === "ok" && !ctx.unit) {
+      const baseLines = list.lines();
+      result.lineSelect = async (level, lineIdx, text) => {
+        if (level >= 20) return { status: "message", type: "E", text: "Se alcanzó el máximo de 20 listas secundarias" };
+        globalThis.abap = abap;
+        for (const hEntry of hides[level]?.[lineIdx] || []) {
+          if (hEntry.ref.set) hEntry.ref.set(hEntry.value);
+        }
+        const syo = abap.builtin.sy.get();
+        syo.lsind.set(level + 1);
+        syo.lilli.set(lineIdx + 1);
+        syo.lisel.set(text || "");
+        syo.ucomm.set("PICK");
+        const prevList = list;
+        const prevLevel = listLevel;
+        list = new ListOutput(abap);
+        listLevel = level + 1;
+        delete hides[listLevel];
+        let r;
+        try {
+          await alsForm();
+          r = { status: "ok" };
+        } catch (e) {
+          if (e instanceof AbapMessageStop) r = { status: "message", type: e.msgType, text: e.message, displayLike: e.displayLike };
+          else if (e instanceof AbapCancel) r = { status: "cancel" };
+          else r = { status: "dump", dump: await describeDump(e, abap, comp.unsupported) };
+        }
+        r.list = list.lines();
+        r.level = listLevel;
+        r.hideLines = new Set(Object.keys(hides[listLevel] || {}).map(Number));
+        list = prevList;
+        listLevel = prevLevel;
+        try {
+          await this.db.commit?.();
+        } catch {
+          /* ignorar */
+        }
+        this.persist();
+        return r;
+      };
+      result.hideLines = new Set(Object.keys(hides[0] || {}).map(Number));
+      void baseLines;
     }
     this.__releaseOwnLocks?.();
     if (this.sqlTrace?.active) this.onTraceChange?.(this.sqlTrace);
