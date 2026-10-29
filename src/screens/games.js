@@ -141,7 +141,18 @@ function gameScreen(app, g) {
   let usedSolution = false;
   let checkFn = () => {};
   let showSolution = () => {};
-  let hintFn = () => app.status(g.hint || "Lee con atención el enunciado y la explicación de cada instrucción.", "I");
+  let hintEl = null;
+  // la pista se muestra en un recuadro visible dentro del reto (y en la barra de estado)
+  const showHint = (text) => {
+    app.status("Pista mostrada en el recuadro amarillo", "I");
+    if (!hintEl) return;
+    hintEl.replaceChildren(h("span", { class: "ico ico-bulb" }), h("div", {}, h("b", {}, "Pista"), h("div", { html: text })));
+    hintEl.classList.remove("show");
+    void hintEl.offsetWidth;
+    hintEl.classList.add("show");
+    hintEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  let hintFn = () => showHint(g.hint || "Lee con atención el enunciado y la explicación de cada instrucción.");
 
   const success = (pts, extra) => {
     const nx = nextGame(g);
@@ -184,6 +195,8 @@ function gameScreen(app, g) {
     el.append(h("div", { class: "game-head" }, h("span", { class: "ico ico-" + t.icon }), h("span", { class: "muted" }, t.title + " · " + g.level), badge(g)));
     el.append(h("h2", { class: "game-title" }, g.title));
     if (g.text) el.append(h("p", { class: "game-text", html: g.text }));
+    hintEl = h("div", { class: "hint-box-game" });
+    el.append(hintEl);
 
     if (g.type === "fill") {
       const parts = parseFill(g.code);
@@ -193,7 +206,7 @@ function gameScreen(app, g) {
         { class: "fill-code" },
         parts.map((p) => {
           if (!p.blank) return p.text;
-          const inp = h("input", { class: "fill-input", style: { width: p.size + 1.5 + "ch" }, spellcheck: "false", autocomplete: "off", oninput: (e) => e.target.classList.remove("ok", "bad") });
+          const inp = h("input", { class: "fill-input", style: { width: p.size + 1.5 + "ch" }, spellcheck: "false", autocomplete: "off", oninput: (e) => e.target.classList.remove("ok", "bad", "hinted") });
           inp.answers = p.answers;
           inputs.push(inp);
           return inp;
@@ -236,9 +249,12 @@ function gameScreen(app, g) {
       };
       hintFn = () => {
         const first = inputs.find((inp) => !sameAnswer(inp.value, inp.answers));
-        if (!first) return app.status("Todos los huecos parecen correctos: pulsa Comprobar", "I");
+        if (!first) return showHint("Todos los huecos parecen correctos: pulsa <b>Comprobar</b> (F8).");
         first.focus();
-        app.status(`Pista: la palabra empieza por "${first.answers[0].substring(0, 1).toUpperCase()}" y tiene ${first.answers[0].length} caracteres`, "I");
+        first.classList.add("hinted");
+        const ans = first.answers[0];
+        const n = inputs.indexOf(first) + 1;
+        showHint(`Hueco ${n} de ${inputs.length} (marcado en amarillo): la respuesta empieza por <code>${esc(ans.substring(0, 1).toUpperCase())}</code> y tiene ${ans.length} carácter(es).` + (g.text ? `<br><span class="muted">Recuerda el objetivo: ${g.text}</span>` : ""));
       };
     } else if (g.type === "predict") {
       el.append(codeBlock(g.code));
@@ -275,7 +291,7 @@ function gameScreen(app, g) {
         opts.children[g.answer].classList.add("ok");
         resultEl.replaceChildren(h("div", { class: "game-result" }, h("p", {}, g.explain)));
       };
-      hintFn = () => app.status("Pista: sigue el valor de cada variable instrucción por instrucción, como haría el depurador", "I");
+      hintFn = () => showHint("Sigue el valor de cada variable instrucción por instrucción, como haría el depurador. Si quieres comprobarlo, copia el código en SE38 y ejecútalo con el botón <b>Depurar</b>.");
     } else {
       // corregir o programar: editor + ejecución
       const draft = progress()[g.id]?.draft;
