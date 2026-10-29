@@ -78,7 +78,7 @@ export function zui5Screen(app) {
                     h("td", {}, p.title),
                     h("td", {}, TEMPLATES.find((t) => t.id === p.template)?.title || p.template),
                     h("td", { class: "muted small" }, new Date(p.changed || p.created).toLocaleString("es-PE")),
-                    h("td", {}, h("button", { class: "btn small", title: "Borrar proyecto", onclick: async () => { if (!(await confirm(`¿Borrar el proyecto ${p.name} y todos sus archivos?`, "Borrar", "Borrar", "Cancelar"))) return; delete ui5Projects()[p.name]; store.save(); render(); } }, h("span", { class: "ico ico-delete" }))),
+                    h("td", {}, h("button", { class: "btn small", title: "Borrar proyecto", onclick: async () => { if (!(await confirm(`¿Borrar el proyecto ${p.name} y todos sus archivos?`, "Borrar", "Borrar", "Cancelar"))) return; delete ui5Projects()[p.name]; delete store.data.ui5Runs?.[p.name]; delete store.data.ui5Tests?.[p.name]; store.save(); render(); } }, h("span", { class: "ico ico-delete" }))),
                   ),
                 ),
               ),
@@ -121,6 +121,9 @@ export async function newProject(app, preset = {}) {
   if (ui5Projects()[r.name]) return app.status(`El proyecto ${r.name} ya existe`, "E");
   if (!r.title) return app.status("Indique un título", "E");
   await app.busy("Generando el proyecto a partir de la plantilla...", async () => {
+    // un proyecto nuevo empieza sin resultados de ejecuciones anteriores con el mismo nombre
+    delete store.data.ui5Runs?.[r.name];
+    delete store.data.ui5Tests?.[r.name];
     ui5Projects()[r.name] = { name: r.name, title: r.title, template: r.template, files: createProject(r.template, r.name, r.title, app.engine), created: new Date().toISOString() };
     store.data.lastUi5 = r.name;
     store.save();
