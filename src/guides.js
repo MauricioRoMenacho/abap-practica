@@ -1003,6 +1003,401 @@ START-OF-SELECTION.
       },
     ],
   },
+  {
+    id: "p4",
+    title: "Paso 4",
+    subtitle: "Programación orientada a objetos",
+    steps: [
+      {
+        id: "p4s1",
+        title: "Tu primera clase",
+        body: [
+          "Una <b>clase</b> es un molde que agrupa datos (<b>atributos</b>) y comportamiento (<b>métodos</b>). Cada <b>objeto</b> creado a partir de la clase tiene sus propios valores. En ABAP una clase local se escribe en dos partes: DEFINITION (qué tiene) e IMPLEMENTATION (cómo funciona).",
+          "Crea <code>ZP4_CLASES</code>:",
+          code(`REPORT zp4_clases.
+
+TYPES ty_monto TYPE p LENGTH 10 DECIMALS 2.
+
+CLASS lcl_cuenta DEFINITION.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING iv_titular TYPE string
+                                  iv_saldo   TYPE ty_monto OPTIONAL.
+    METHODS depositar IMPORTING iv_monto TYPE ty_monto.
+    METHODS get_saldo RETURNING VALUE(rv_saldo) TYPE ty_monto.
+    METHODS mostrar.
+  PRIVATE SECTION.
+    DATA mv_titular TYPE string.
+    DATA mv_saldo   TYPE ty_monto.
+ENDCLASS.
+
+CLASS lcl_cuenta IMPLEMENTATION.
+  METHOD constructor.
+    mv_titular = iv_titular.
+    mv_saldo   = iv_saldo.
+  ENDMETHOD.
+
+  METHOD depositar.
+    mv_saldo = mv_saldo + iv_monto.
+  ENDMETHOD.
+
+  METHOD get_saldo.
+    rv_saldo = mv_saldo.
+  ENDMETHOD.
+
+  METHOD mostrar.
+    WRITE: / 'Titular:', mv_titular, 'Saldo:', mv_saldo.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  DATA: lo_cuenta1 TYPE REF TO lcl_cuenta,
+        lv_monto   TYPE ty_monto.
+
+  lv_monto = '500.00'.
+  CREATE OBJECT lo_cuenta1 EXPORTING iv_titular = \`Ana Torres\` iv_saldo = lv_monto.
+
+  " Forma moderna: NEW
+  DATA(lo_cuenta2) = NEW lcl_cuenta( iv_titular = \`Luis Rojas\` ).
+
+  lv_monto = '250.50'.
+  lo_cuenta1->depositar( lv_monto ).
+  lv_monto = '1000.00'.
+  lo_cuenta2->depositar( iv_monto = lv_monto ).
+
+  lo_cuenta1->mostrar( ).
+  lo_cuenta2->mostrar( ).
+
+  DATA lv_total TYPE ty_monto.
+  lv_total = lo_cuenta1->get_saldo( ) + lo_cuenta2->get_saldo( ).
+  WRITE: / 'Saldo total del banco:', lv_total.`),
+          syntax([
+            ["CLASS lcl_cuenta DEFINITION.", "Declara la clase: sus secciones, atributos y métodos. <code>lcl_</code> es la convención para clases locales."],
+            ["PUBLIC SECTION. / PRIVATE SECTION.", "PUBLIC: accesible desde fuera de la clase. PRIVATE: solo desde dentro de la clase (encapsulamiento: el saldo solo cambia a través de los métodos)."],
+            ["METHODS nombre IMPORTING ... RETURNING VALUE(...)", "Declara un método con sus parámetros. IMPORTING recibe datos; RETURNING devuelve un único valor (siempre por valor)."],
+            ["constructor", "Método especial que se ejecuta automáticamente al crear el objeto; sirve para inicializarlo."],
+            ["OPTIONAL", "El parámetro puede omitirse al llamar al método."],
+            ["CLASS lcl_cuenta IMPLEMENTATION. METHOD ... ENDMETHOD.", "Escribe el código de cada método declarado."],
+            ["TYPE REF TO lcl_cuenta", "Variable de referencia que apunta a un objeto de la clase."],
+            ["CREATE OBJECT lo EXPORTING ...", "Crea el objeto (forma clásica) y pasa los parámetros del constructor."],
+            ["NEW lcl_cuenta( ... )", "Crea el objeto (forma moderna) en una expresión."],
+            ["lo_cuenta1->depositar( lv_monto )", "<code>-&gt;</code> llama a un método del objeto. Con un solo parámetro no hace falta escribir su nombre."],
+            ["TYPES ty_monto TYPE p LENGTH 10 DECIMALS 2.", "Un tipo propio para los importes: así todos los parámetros y atributos usan exactamente el mismo tipo."],
+          ]),
+        ],
+        check: () => run("ZP4_CLASES")?.status === "ok" && activeHas("ZP4_CLASES", /CLASS\s+\w+\s+DEFINITION/i),
+        hint: "Ejecuta ZP4_CLASES con una clase local.",
+      },
+      {
+        id: "p4s2",
+        title: "Excepciones propias",
+        body: [
+          "Cuando un método no puede hacer su trabajo, lo correcto es <b>lanzar una excepción</b> en vez de escribir un mensaje. Quien llama decide qué hacer con TRY ... CATCH. Crea <code>ZP4_EXCEPCIONES</code> y ejecútalo con un monto mayor que 500 y luego con uno menor:",
+          code(`REPORT zp4_excepciones.
+
+TYPES ty_monto TYPE p LENGTH 10 DECIMALS 2.
+
+" Clase de excepción propia
+CLASS lcx_saldo_insuficiente DEFINITION INHERITING FROM cx_static_check.
+  PUBLIC SECTION.
+    DATA mv_faltante TYPE ty_monto READ-ONLY.
+    METHODS constructor IMPORTING iv_faltante TYPE ty_monto.
+ENDCLASS.
+
+CLASS lcx_saldo_insuficiente IMPLEMENTATION.
+  METHOD constructor.
+    super->constructor( ).
+    mv_faltante = iv_faltante.
+  ENDMETHOD.
+ENDCLASS.
+
+CLASS lcl_cuenta DEFINITION.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING iv_saldo TYPE ty_monto.
+    METHODS retirar IMPORTING iv_monto TYPE ty_monto
+                    RAISING   lcx_saldo_insuficiente.
+    DATA mv_saldo TYPE ty_monto READ-ONLY.
+ENDCLASS.
+
+CLASS lcl_cuenta IMPLEMENTATION.
+  METHOD constructor.
+    mv_saldo = iv_saldo.
+  ENDMETHOD.
+
+  METHOD retirar.
+    IF iv_monto > mv_saldo.
+      DATA(lv_faltante) = CONV ty_monto( iv_monto - mv_saldo ).
+      RAISE EXCEPTION TYPE lcx_saldo_insuficiente
+        EXPORTING iv_faltante = lv_faltante.
+    ENDIF.
+    mv_saldo = mv_saldo - iv_monto.
+  ENDMETHOD.
+ENDCLASS.
+
+PARAMETERS p_monto TYPE ty_monto DEFAULT '300.00'.
+
+START-OF-SELECTION.
+  DATA(lo_cuenta) = NEW lcl_cuenta( CONV #( '500.00' ) ).
+
+  TRY.
+      lo_cuenta->retirar( p_monto ).
+      WRITE: / 'Retiro correcto. Nuevo saldo:', lo_cuenta->mv_saldo.
+    CATCH lcx_saldo_insuficiente INTO DATA(lx_error).
+      WRITE: / 'No se pudo retirar. Faltan:', lx_error->mv_faltante.
+  ENDTRY.`),
+          syntax([
+            ["CLASS lcx_... DEFINITION INHERITING FROM cx_static_check.", "Una clase de excepción hereda de CX_STATIC_CHECK (el compilador obliga a declararla o capturarla), CX_DYNAMIC_CHECK o CX_NO_CHECK. Convención: <code>lcx_</code> / <code>zcx_</code>."],
+            ["super->constructor( ).", "En el constructor de una subclase hay que llamar primero al constructor de la clase padre."],
+            ["READ-ONLY", "El atributo es público para leerlo, pero solo la propia clase puede cambiarlo."],
+            ["RAISING lcx_saldo_insuficiente", "Declara en el método qué excepciones puede lanzar."],
+            ["RAISE EXCEPTION TYPE lcx_... EXPORTING ...", "Lanza la excepción: el método se interrumpe y el control salta al CATCH de quien lo llamó."],
+            ["CATCH lcx_... INTO DATA(lx_error).", "Captura la excepción y deja el objeto en lx_error para leer sus atributos."],
+            ["CONV #( '500.00' )", "Convierte el literal al tipo que espera el parámetro."],
+          ]),
+        ],
+        check: () => run("ZP4_EXCEPCIONES")?.status === "ok" && activeHas("ZP4_EXCEPCIONES", /RAISE\s+EXCEPTION/i),
+        hint: "Ejecuta ZP4_EXCEPCIONES.",
+      },
+      {
+        id: "p4s3",
+        title: "Herencia y polimorfismo",
+        body: [
+          "La <b>herencia</b> permite crear una clase a partir de otra, reutilizando su código y cambiando solo lo necesario. Aquí un jefe es un empleado que cobra un 20% más. Los datos salen de las tablas de personal PA0001 y PA0008. Crea <code>ZP4_HERENCIA</code>:",
+          code(`REPORT zp4_herencia.
+
+CLASS lcl_empleado DEFINITION.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING iv_nombre TYPE string
+                                  iv_sueldo TYPE p.
+    METHODS calcular_pago RETURNING VALUE(rv_pago) TYPE p.
+    METHODS mostrar.
+  PROTECTED SECTION.
+    DATA mv_nombre TYPE string.
+    DATA mv_sueldo TYPE p LENGTH 10 DECIMALS 2.
+ENDCLASS.
+
+CLASS lcl_empleado IMPLEMENTATION.
+  METHOD constructor.
+    mv_nombre = iv_nombre.
+    mv_sueldo = iv_sueldo.
+  ENDMETHOD.
+
+  METHOD calcular_pago.
+    rv_pago = mv_sueldo.
+  ENDMETHOD.
+
+  METHOD mostrar.
+    DATA lv_pago TYPE p LENGTH 10 DECIMALS 2.
+    lv_pago = calcular_pago( ).
+    WRITE: / mv_nombre, 'paga:', lv_pago.
+  ENDMETHOD.
+ENDCLASS.
+
+" El jefe ES UN empleado, pero cobra un bono del 20%
+CLASS lcl_jefe DEFINITION INHERITING FROM lcl_empleado.
+  PUBLIC SECTION.
+    METHODS calcular_pago REDEFINITION.
+ENDCLASS.
+
+CLASS lcl_jefe IMPLEMENTATION.
+  METHOD calcular_pago.
+    rv_pago = super->calcular_pago( ) * '1.20'.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  " Datos reales: empleados vigentes de la sociedad 1000
+  SELECT p1~ename, p1~stltx, p8~bet01
+    FROM pa0001 AS p1
+    INNER JOIN pa0008 AS p8 ON p8~pernr = p1~pernr
+    WHERE p1~bukrs = '1000'
+      AND p8~endda = '99991231'
+    INTO TABLE @DATA(lt_datos).
+
+  DATA lt_empleados TYPE STANDARD TABLE OF REF TO lcl_empleado WITH EMPTY KEY.
+  DATA lo_empleado  TYPE REF TO lcl_empleado.
+
+  LOOP AT lt_datos INTO DATA(ls_dato).
+    DATA(lv_nombre) = CONV string( ls_dato-ename ).
+    IF ls_dato-stltx CS 'Gerente' OR ls_dato-stltx CS 'Jefe'.
+      lo_empleado = NEW lcl_jefe( iv_nombre = lv_nombre iv_sueldo = ls_dato-bet01 ).
+    ELSE.
+      lo_empleado = NEW lcl_empleado( iv_nombre = lv_nombre iv_sueldo = ls_dato-bet01 ).
+    ENDIF.
+    APPEND lo_empleado TO lt_empleados.
+  ENDLOOP.
+
+  " Polimorfismo: la misma llamada se comporta distinto según la clase real
+  LOOP AT lt_empleados INTO lo_empleado.
+    lo_empleado->mostrar( ).
+  ENDLOOP.`),
+          syntax([
+            ["INHERITING FROM lcl_empleado", "lcl_jefe hereda todos los atributos y métodos de lcl_empleado."],
+            ["PROTECTED SECTION.", "Visible en la clase y en sus subclases, pero no desde fuera."],
+            ["METHODS calcular_pago REDEFINITION.", "La subclase reemplaza la implementación del método heredado."],
+            ["super->calcular_pago( )", "Llama a la versión del método de la clase padre."],
+            ["TABLE OF REF TO lcl_empleado", "Tabla interna de referencias a objetos. Puede guardar empleados y jefes, porque un jefe ES UN empleado."],
+            ["Polimorfismo", "En el último LOOP todos se tratan como lcl_empleado, pero cada objeto ejecuta su propia versión de calcular_pago."],
+            ["CS 'Jefe'", "Contains String: verdadero si el texto contiene esa cadena (sin distinguir mayúsculas)."],
+            ["CONV string( ... )", "Convierte el valor al tipo string."],
+          ]),
+        ],
+        check: () => run("ZP4_HERENCIA")?.status === "ok" && activeHas("ZP4_HERENCIA", /INHERITING\s+FROM/i),
+        hint: "Ejecuta ZP4_HERENCIA.",
+      },
+      {
+        id: "p4s4",
+        title: "Interfaces y miembros estáticos",
+        body: [
+          "Una <b>interfaz</b> es un contrato: lista métodos sin implementarlos. Clases muy distintas pueden implementarla y tratarse igual. Crea <code>ZP4_INTERFACES</code>:",
+          code(`REPORT zp4_interfaces.
+
+TYPES ty_area TYPE p LENGTH 10 DECIMALS 2.
+
+INTERFACE lif_figura.
+  METHODS area RETURNING VALUE(rv_area) TYPE ty_area.
+  METHODS nombre RETURNING VALUE(rv_nombre) TYPE string.
+ENDINTERFACE.
+
+CLASS lcl_rectangulo DEFINITION.
+  PUBLIC SECTION.
+    INTERFACES lif_figura.
+    METHODS constructor IMPORTING iv_base TYPE i iv_altura TYPE i.
+  PRIVATE SECTION.
+    DATA: mv_base TYPE i, mv_altura TYPE i.
+ENDCLASS.
+
+CLASS lcl_rectangulo IMPLEMENTATION.
+  METHOD constructor.
+    mv_base = iv_base.
+    mv_altura = iv_altura.
+  ENDMETHOD.
+  METHOD lif_figura~area.
+    rv_area = mv_base * mv_altura.
+  ENDMETHOD.
+  METHOD lif_figura~nombre.
+    rv_nombre = \`Rectángulo\`.
+  ENDMETHOD.
+ENDCLASS.
+
+CLASS lcl_circulo DEFINITION.
+  PUBLIC SECTION.
+    INTERFACES lif_figura.
+    METHODS constructor IMPORTING iv_radio TYPE i.
+    CLASS-DATA gv_creados TYPE i READ-ONLY.
+  PRIVATE SECTION.
+    DATA mv_radio TYPE i.
+ENDCLASS.
+
+CLASS lcl_circulo IMPLEMENTATION.
+  METHOD constructor.
+    mv_radio = iv_radio.
+    gv_creados = gv_creados + 1.
+  ENDMETHOD.
+  METHOD lif_figura~area.
+    rv_area = '3.1416' * mv_radio * mv_radio.
+  ENDMETHOD.
+  METHOD lif_figura~nombre.
+    rv_nombre = \`Círculo\`.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  DATA lt_figuras TYPE STANDARD TABLE OF REF TO lif_figura WITH EMPTY KEY.
+
+  APPEND NEW lcl_rectangulo( iv_base = 4 iv_altura = 3 ) TO lt_figuras.
+  APPEND NEW lcl_circulo( iv_radio = 2 ) TO lt_figuras.
+  APPEND NEW lcl_circulo( iv_radio = 1 ) TO lt_figuras.
+
+  LOOP AT lt_figuras INTO DATA(lo_figura).
+    DATA(lv_area) = lo_figura->area( ).
+    WRITE: / lo_figura->nombre( ), 'área:', lv_area.
+  ENDLOOP.
+
+  WRITE: / 'Círculos creados:', lcl_circulo=>gv_creados.`),
+          syntax([
+            ["INTERFACE lif_figura. ... ENDINTERFACE.", "Declara la interfaz y sus métodos. Convención: <code>lif_</code> / <code>zif_</code>."],
+            ["INTERFACES lif_figura.", "La clase se compromete a implementar todos los métodos de la interfaz."],
+            ["METHOD lif_figura~area.", "Los métodos de una interfaz se implementan con el nombre <code>interfaz~método</code>."],
+            ["TABLE OF REF TO lif_figura", "Tabla de referencias a la interfaz: guarda rectángulos y círculos juntos."],
+            ["CLASS-DATA gv_creados", "Atributo <b>estático</b>: uno solo para toda la clase, compartido por todos los objetos."],
+            ["lcl_circulo=>gv_creados", "<code>=&gt;</code> accede a atributos y métodos estáticos usando el nombre de la clase, sin objeto."],
+          ]),
+        ],
+        check: () => run("ZP4_INTERFACES")?.status === "ok" && activeHas("ZP4_INTERFACES", /INTERFACE\s+\w+\s*\./i),
+        hint: "Ejecuta ZP4_INTERFACES.",
+      },
+      {
+        id: "p4s5",
+        title: "Reto: reporte orientado a objetos",
+        body: [
+          "En los proyectos reales los reportes se escriben con una clase: un método obtiene los datos y otro los muestra. Crea <code>ZP4_RETO</code>: una clase <code>lcl_reporte</code> con un método estático <code>ejecutar</code> que crea el objeto, llama a <code>obtener_datos</code> (pedidos de venta VBAK con el nombre del cliente de KNA1, filtrados por sociedad con SELECT-OPTIONS) y a <code>mostrar</code> (ALV con total del valor neto).",
+          `<details><summary>Ver una solución</summary><pre class="g-code">${esc(`REPORT zp4_reto.
+
+TABLES vbak.
+SELECT-OPTIONS s_bukrs FOR vbak-bukrs_vf.
+
+CLASS lcl_reporte DEFINITION.
+  PUBLIC SECTION.
+    TYPES: BEGIN OF ty_venta,
+             vbeln TYPE vbak-vbeln,
+             erdat TYPE vbak-erdat,
+             name1 TYPE kna1-name1,
+             netwr TYPE vbak-netwr,
+             waerk TYPE vbak-waerk,
+           END OF ty_venta,
+           tt_ventas TYPE STANDARD TABLE OF ty_venta WITH EMPTY KEY.
+    CLASS-METHODS ejecutar.
+    METHODS obtener_datos.
+    METHODS mostrar.
+  PRIVATE SECTION.
+    DATA mt_ventas TYPE tt_ventas.
+ENDCLASS.
+
+CLASS lcl_reporte IMPLEMENTATION.
+  METHOD ejecutar.
+    DATA(lo_reporte) = NEW lcl_reporte( ).
+    lo_reporte->obtener_datos( ).
+    lo_reporte->mostrar( ).
+  ENDMETHOD.
+
+  METHOD obtener_datos.
+    SELECT a~vbeln, a~erdat, k~name1, a~netwr, a~waerk
+      FROM vbak AS a
+      INNER JOIN kna1 AS k ON k~kunnr = a~kunnr
+      WHERE a~bukrs_vf IN @s_bukrs
+      ORDER BY a~vbeln
+      INTO TABLE @mt_ventas.
+  ENDMETHOD.
+
+  METHOD mostrar.
+    IF mt_ventas IS INITIAL.
+      MESSAGE 'No hay ventas para esa selección' TYPE 'S' DISPLAY LIKE 'W'.
+      RETURN.
+    ENDIF.
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_alv)
+                                CHANGING  t_table      = mt_ventas ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_display_settings( )->set_list_header( 'Ventas (reporte orientado a objetos)' ).
+        lo_alv->get_aggregations( )->add_aggregation( 'NETWR' ).
+        lo_alv->display( ).
+      CATCH cx_salv_msg cx_salv_not_found cx_salv_existing cx_salv_data_error INTO DATA(lx_error).
+        MESSAGE lx_error->get_text( ) TYPE 'E'.
+    ENDTRY.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  lcl_reporte=>ejecutar( ).`)}</pre></details>`,
+          "Observa que START-OF-SELECTION tiene una sola línea: toda la lógica está en la clase. Usa el depurador (F5) para seguir el flujo entre los métodos.",
+          "¡Felicitaciones! Ya dominas los fundamentos de ABAP: programas, diccionario, ALV, tablas internas, depuración y objetos.",
+        ],
+        check: () => alvs("ZP4_RETO").length > 0 && activeHas("ZP4_RETO", /CLASS-METHODS/i),
+        hint: "Muestra el ALV de ZP4_RETO desde una clase.",
+      },
+    ],
+  },
 ];
 
 export function guidePanel(app, host) {

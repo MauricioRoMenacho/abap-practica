@@ -1522,15 +1522,16 @@ table.alv tr.clickable {
 }
 .guide-tabs {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   flex-wrap: wrap;
 }
 .gtab {
   border: 1px solid var(--border);
   background: #f2f4f6;
   border-radius: 16px;
-  padding: 4px 9px;
-  font-size: 13px;
+  padding: 3px 7px;
+  font-size: 12px;
+  gap: 4px !important;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1543,7 +1544,7 @@ table.alv tr.clickable {
   font-weight: 600;
 }
 .gtab-count {
-  font-size: 11px;
+  font-size: 10px;
   background: rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   padding: 0 6px;
