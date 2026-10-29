@@ -665,7 +665,15 @@ START-OF-SELECTION.
 
 export function guidePanel(app, host) {
   let current = localStorage.getItem("abapp.guideTab") || "p1";
-  let openStep = null;
+  // el ejercicio abierto y la posición de scroll se recuerdan al recargar
+  const stepKey = () => "abapp.guideStep." + current;
+  let openStep = localStorage.getItem(stepKey()) || null;
+  const setOpenStep = (v) => {
+    openStep = v;
+    if (v) localStorage.setItem(stepKey(), v);
+    else localStorage.removeItem(stepKey());
+  };
+  let savedScroll = Number(localStorage.getItem("abapp.guideScroll." + current)) || 0;
   const done = () => {
     const out = {};
     for (const g of GUIDES)
@@ -687,7 +695,7 @@ export function guidePanel(app, host) {
         if (v && !lastDone[k]) {
           const step = GUIDES.flatMap((g) => g.steps).find((s) => s.id === k);
           toast(`Ejercicio completado: ${step.title}`);
-          openStep = null;
+          if (openStep === k) setOpenStep(null);
         }
       }
     }
@@ -697,6 +705,8 @@ export function guidePanel(app, host) {
     const n = g.steps.filter((s) => d[s.id]).length;
     const firstOpen = g.steps.find((s) => !d[s.id])?.id;
     const active = openStep || firstOpen;
+    const prevGuide = host.querySelector(".guide");
+    const scrollTop = prevGuide ? prevGuide.scrollTop : savedScroll;
     host.replaceChildren(
       h(
         "div",
@@ -714,9 +724,13 @@ export function guidePanel(app, host) {
                 {
                   class: "gtab" + (x.id === current ? " active" : ""),
                   onclick: () => {
+                    const g0 = host.querySelector(".guide");
+                    if (g0) localStorage.setItem("abapp.guideScroll." + current, String(g0.scrollTop));
                     current = x.id;
-                    openStep = null;
+                    openStep = localStorage.getItem(stepKey()) || null;
+                    savedScroll = Number(localStorage.getItem("abapp.guideScroll." + current)) || 0;
                     localStorage.setItem("abapp.guideTab", current);
+                    host.replaceChildren();
                     render();
                   },
                 },
@@ -742,7 +756,7 @@ export function guidePanel(app, host) {
                 {
                   class: "step-head",
                   onclick: () => {
-                    openStep = isOpen ? "__none" : s.id;
+                    setOpenStep(isOpen ? "__none" : s.id);
                     render();
                   },
                 },
@@ -829,6 +843,13 @@ export function guidePanel(app, host) {
         n === total ? h("div", { class: "guide-done" }, current === "p1" ? "¡Paso 1 completado! Continúa con el Paso 2 →" : "¡Paso 2 completado! Ya sabes crear reportes ALV.") : null,
       ),
     );
+    const guideEl = host.querySelector(".guide");
+    guideEl.scrollTop = scrollTop;
+    let t;
+    guideEl.addEventListener("scroll", () => {
+      clearTimeout(t);
+      t = setTimeout(() => localStorage.setItem("abapp.guideScroll." + current, String(guideEl.scrollTop)), 150);
+    });
   };
 
   function toast(text) {
