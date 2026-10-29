@@ -104,6 +104,8 @@ export class App {
             ["Menú SAP Easy Access", () => this.home()],
           ]),
           menu("Sistema", [
+            ["Cerrar sesión (volver a la página de inicio)", async () => { const cur = this.current(); if (cur?.canLeave && !(await cur.canLeave())) return; this.logoff?.(); }],
+            "-",
             ["Usuario e idioma...", () => this.userSettings()],
             "-",
             ["Exportar mis datos (respaldo)", () => this.exportData()],

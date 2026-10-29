@@ -86,7 +86,12 @@ async function boot() {
   app.guide.render();
   app.home();
   const hash = location.hash.replace("#", "").toUpperCase();
-  if (hash && transactions[hash]) app.command(hash);
+  const { showLanding, inSystem } = await import("./landing.js");
+  app.logoff = () => showLanding(app);
+  if (hash && transactions[hash]) {
+    sessionStorage.setItem("abapp.inSystem", "1");
+    app.command(hash);
+  } else if (!inSystem()) await showLanding(app);
 }
 
 boot().catch((e) => {
