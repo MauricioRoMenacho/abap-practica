@@ -1522,13 +1522,15 @@ table.alv tr.clickable {
 }
 .guide-tabs {
   display: flex;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 .gtab {
   border: 1px solid var(--border);
   background: #f2f4f6;
   border-radius: 16px;
-  padding: 5px 12px;
+  padding: 4px 9px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 6px;

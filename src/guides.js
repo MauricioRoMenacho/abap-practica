@@ -661,6 +661,326 @@ START-OF-SELECTION.
       },
     ],
   },
+  {
+    id: "p3",
+    title: "Paso 3",
+    subtitle: "Tablas internas, tablas estándar y JOINs",
+    steps: [
+      {
+        id: "p3s1",
+        title: "Estructuras y tablas internas",
+        body: [
+          "Una <b>tabla interna</b> es una tabla que vive en la memoria mientras corre el programa: la llenas, la recorres, la ordenas... y desaparece al terminar. Sus líneas tienen la forma de una <b>estructura</b> que defines con TYPES.",
+          "Crea el programa <code>ZP3_TABLAS</code>:",
+          code(`REPORT zp3_tablas.
+
+TYPES: BEGIN OF ty_producto,
+         codigo TYPE c LENGTH 10,
+         nombre TYPE c LENGTH 20,
+         precio TYPE p LENGTH 8 DECIMALS 2,
+         stock  TYPE i,
+       END OF ty_producto,
+       tt_productos TYPE STANDARD TABLE OF ty_producto WITH EMPTY KEY.
+
+DATA: ls_producto  TYPE ty_producto,
+      lt_productos TYPE tt_productos.
+
+" 1) Llenar con APPEND usando un área de trabajo
+ls_producto-codigo = 'P001'.
+ls_producto-nombre = 'Laptop'.
+ls_producto-precio = '3890.00'.
+ls_producto-stock  = 12.
+APPEND ls_producto TO lt_productos.
+
+" 2) Llenar con VALUE (ABAP moderno)
+APPEND VALUE #( codigo = 'P002' nombre = 'Monitor' precio = '790.00' stock = 30 ) TO lt_productos.
+lt_productos = VALUE #( BASE lt_productos
+  ( codigo = 'P003' nombre = 'Teclado' precio = '120.00' stock = 0 )
+  ( codigo = 'P004' nombre = 'Mouse'   precio = '65.00'  stock = 80 ) ).
+
+WRITE: / 'Productos en la tabla:', lines( lt_productos ).
+ULINE.
+LOOP AT lt_productos INTO ls_producto.
+  WRITE: / sy-tabix, ls_producto-codigo, ls_producto-nombre, ls_producto-precio, ls_producto-stock.
+ENDLOOP.`),
+          syntax([
+            ["TYPES: BEGIN OF ty ... END OF ty,", "Define una estructura: un grupo de campos con nombre. Aquí cada producto tiene código, nombre, precio y stock."],
+            ["tt_productos TYPE STANDARD TABLE OF ty_producto", "Define un <b>tipo de tabla</b> cuyas líneas son la estructura. Por convención: <code>ty_</code> para estructuras, <code>tt_</code> para tipos de tabla."],
+            ["WITH EMPTY KEY", "La tabla no tiene clave. Con WITH DEFAULT KEY la clave serían los campos de texto."],
+            ["ls_ / lt_", "Convención de nombres: <code>ls_</code> estructura local (una línea), <code>lt_</code> tabla interna local, <code>lv_</code> variable simple, <code>gt_</code> tabla global."],
+            ["APPEND ls TO lt.", "Añade una copia de la estructura al final de la tabla."],
+            ["VALUE #( campo = valor ... )", "Construye una estructura o tabla en una sola expresión. <code>#</code> significa \"el tipo que corresponda\" según dónde se usa."],
+            ["VALUE #( BASE lt ( ... ) ( ... ) )", "BASE conserva las líneas que ya tenía la tabla y añade las nuevas; cada línea va entre paréntesis."],
+            ["sy-tabix", "Dentro de LOOP, número de la línea que se está procesando."],
+          ]),
+        ],
+        check: () => run("ZP3_TABLAS")?.status === "ok",
+        hint: "Ejecuta ZP3_TABLAS.",
+      },
+      {
+        id: "p3s2",
+        title: "Leer, modificar y borrar líneas",
+        body: [
+          "Las operaciones del día a día con tablas internas. Crea <code>ZP3_OPERACIONES</code>:",
+          code(`REPORT zp3_operaciones.
+
+TYPES: BEGIN OF ty_producto,
+         codigo TYPE c LENGTH 10,
+         nombre TYPE c LENGTH 20,
+         precio TYPE p LENGTH 8 DECIMALS 2,
+         stock  TYPE i,
+       END OF ty_producto.
+
+DATA lt_productos TYPE STANDARD TABLE OF ty_producto WITH EMPTY KEY.
+
+lt_productos = VALUE #(
+  ( codigo = 'P001' nombre = 'Laptop'    precio = '3890.00' stock = 12 )
+  ( codigo = 'P002' nombre = 'Monitor'   precio = '790.00'  stock = 30 )
+  ( codigo = 'P003' nombre = 'Teclado'   precio = '120.00'  stock = 0 )
+  ( codigo = 'P004' nombre = 'Mouse'     precio = '65.00'   stock = 80 )
+  ( codigo = 'P005' nombre = 'Parlantes' precio = '150.00'  stock = 0 ) ).
+
+" READ TABLE: buscar una línea por un campo
+READ TABLE lt_productos INTO DATA(ls_producto) WITH KEY codigo = 'P002'.
+IF sy-subrc = 0.
+  WRITE: / 'Encontrado:', ls_producto-nombre, 'en la línea', sy-tabix.
+ENDIF.
+
+" Expresión de tabla (ABAP moderno)
+IF line_exists( lt_productos[ codigo = 'P004' ] ).
+  WRITE: / 'Precio del mouse:', lt_productos[ codigo = 'P004' ]-precio.
+ENDIF.
+
+" Modificar con un field-symbol: subir 10% los precios
+LOOP AT lt_productos ASSIGNING FIELD-SYMBOL(<ls_prod>).
+  <ls_prod>-precio = <ls_prod>-precio * '1.10'.
+ENDLOOP.
+
+" MODIFY con TRANSPORTING: cambiar solo el stock del teclado
+ls_producto-stock = 25.
+MODIFY lt_productos FROM ls_producto TRANSPORTING stock WHERE codigo = 'P003'.
+
+" Borrar los productos sin stock y ordenar por precio
+DELETE lt_productos WHERE stock = 0.
+SORT lt_productos BY precio DESCENDING.
+
+ULINE.
+LOOP AT lt_productos INTO ls_producto.
+  WRITE: / ls_producto-codigo, ls_producto-nombre, ls_producto-precio, ls_producto-stock.
+ENDLOOP.`),
+          syntax([
+            ["READ TABLE lt INTO ls WITH KEY campo = valor.", "Busca la primera línea que cumpla la condición. Si la encuentra, <code>sy-subrc = 0</code> y <code>sy-tabix</code> tiene su número de línea; si no, sy-subrc = 4."],
+            ["lt[ campo = valor ]", "Expresión de tabla: devuelve la línea directamente. ¡Cuidado! Si no existe lanza la excepción CX_SY_ITAB_LINE_NOT_FOUND (dump si no la capturas)."],
+            ["line_exists( lt[ ... ] )", "Devuelve verdadero si la línea existe. Úsalo antes de una expresión de tabla para evitar el dump."],
+            ["LOOP AT lt ASSIGNING FIELD-SYMBOL(<fs>).", "El field-symbol apunta a la línea real: lo que cambies en <code>&lt;fs&gt;</code> se cambia en la tabla. Es más rápido que INTO + MODIFY."],
+            ["MODIFY lt FROM ls TRANSPORTING campo WHERE ...", "Cambia en todas las líneas que cumplan el WHERE solo los campos indicados en TRANSPORTING."],
+            ["DELETE lt WHERE condición.", "Borra todas las líneas que cumplan la condición."],
+            ["SORT lt BY campo DESCENDING.", "Ordena la tabla por uno o varios campos (ASCENDING es el valor por defecto)."],
+            ["'1.10'", "Los números con decimales se escriben como texto entre comillas: ABAP los convierte al hacer el cálculo."],
+          ]),
+        ],
+        check: () => run("ZP3_OPERACIONES")?.status === "ok",
+        hint: "Ejecuta ZP3_OPERACIONES.",
+      },
+      {
+        id: "p3s3",
+        title: "Conoce las tablas estándar (SE16)",
+        body: [
+          "El sistema trae tablas estándar con datos, como en un SAP real. Ábrelas en <code>/nSE16</code> y su estructura en <code>/nSE11</code>:",
+          "<table class=\"g-table\"><tr><th>Tabla</th><th>Contenido</th><th>Clave</th></tr><tr><td>T001</td><td>Sociedades</td><td>BUKRS</td></tr><tr><td>KNA1</td><td>Clientes</td><td>KUNNR</td></tr><tr><td>VBAK</td><td>Pedidos de venta (cabecera)</td><td>VBELN</td></tr><tr><td>VBAP</td><td>Pedidos de venta (posiciones)</td><td>VBELN + POSNR</td></tr><tr><td>LFA1</td><td>Proveedores</td><td>LIFNR</td></tr><tr><td>EKKO / EKPO</td><td>Pedidos de compra (cabecera / posiciones)</td><td>EBELN (+ EBELP)</td></tr><tr><td>MARA / MAKT</td><td>Materiales / descripciones por idioma</td><td>MATNR (+ SPRAS)</td></tr><tr><td>PA0001</td><td>Empleados: sociedad, puesto</td><td>PERNR + fechas</td></tr><tr><td>PA0002</td><td>Empleados: datos personales</td><td>PERNR + fechas</td></tr><tr><td>PA0008</td><td>Empleados: sueldo</td><td>PERNR + fechas</td></tr><tr><td>SBOOK / SCUSTOM</td><td>Reservas y clientes de vuelos</td><td></td></tr></table>",
+          "<b>Cómo se relacionan:</b> un pedido de venta (VBAK) tiene un cliente (VBAK-KUNNR = KNA1-KUNNR) y varias posiciones (VBAP con el mismo VBELN); cada posición tiene un material (VBAP-MATNR = MARA-MATNR) cuya descripción está en MAKT. Un empleado tiene varios registros con fechas de validez (BEGDA-ENDDA); el vigente es el que tiene ENDDA = 31.12.9999.",
+          "Abre <b>VBAK</b> en SE16 y luego <b>VBAP</b> filtrando por el mismo número de pedido (por ejemplo 0000005001) para ver la cabecera y sus posiciones.",
+          syntax([
+            ["Cabecera / posición", "Patrón típico de SAP: una tabla con los datos generales del documento y otra con sus líneas, unidas por el número de documento."],
+            ["MANDT", "Todas las tablas empiezan por el mandante; el sistema lo maneja solo en tus SELECT."],
+            ["BEGDA / ENDDA", "Inicio y fin de validez (tablas de RRHH). 31.12.9999 significa \"vigente\"."],
+          ]),
+        ],
+        check: () => !!store.data.visited["SE16-DATA"],
+        hint: "Abre una tabla estándar en SE16.",
+      },
+      {
+        id: "p3s4",
+        title: "JOIN: datos de varias tablas",
+        body: [
+          "Con un <b>JOIN</b> lees en un solo SELECT datos de tablas relacionadas. Crea <code>ZP3_VENTAS</code>:",
+          code(`REPORT zp3_ventas.
+
+PARAMETERS p_bukrs TYPE vbak-bukrs_vf DEFAULT '1000'.
+
+START-OF-SELECTION.
+  " Pedidos de venta con el nombre del cliente (JOIN de 2 tablas)
+  SELECT a~vbeln, a~erdat, a~kunnr, k~name1, a~netwr, a~waerk
+    FROM vbak AS a
+    INNER JOIN kna1 AS k ON k~kunnr = a~kunnr
+    WHERE a~bukrs_vf = @p_bukrs
+    ORDER BY a~vbeln
+    INTO TABLE @DATA(lt_pedidos).
+
+  WRITE: / 'Pedidos de la sociedad', p_bukrs, ':', lines( lt_pedidos ).
+  ULINE.
+  LOOP AT lt_pedidos INTO DATA(ls_pedido).
+    WRITE: / ls_pedido-vbeln, ls_pedido-erdat, ls_pedido-name1(25), ls_pedido-netwr, ls_pedido-waerk.
+  ENDLOOP.`),
+          syntax([
+            ["FROM vbak AS a", "Da un alias corto a la tabla para referirte a sus campos como <code>a~campo</code>."],
+            ["INNER JOIN kna1 AS k ON k~kunnr = a~kunnr", "Une cada pedido con su cliente usando el campo común. INNER JOIN solo devuelve los pedidos que tienen cliente; LEFT OUTER JOIN devolvería todos."],
+            ["a~vbeln", "La tilde <code>~</code> separa el alias de la tabla y el campo dentro del SQL."],
+            ["INTO TABLE @DATA(lt_pedidos)", "Crea la tabla interna en línea con exactamente los campos de la lista. En el SQL moderno INTO puede ir al final."],
+            ["ls_pedido-name1(25)", "Offset/longitud: escribe solo los primeros 25 caracteres del campo."],
+            ["PARAMETERS p_bukrs TYPE vbak-bukrs_vf", "El parámetro toma el tipo del campo de la tabla."],
+          ]),
+        ],
+        check: () => run("ZP3_VENTAS")?.status === "ok" && activeHas("ZP3_VENTAS", /JOIN/i),
+        hint: "Ejecuta ZP3_VENTAS con un JOIN.",
+      },
+      {
+        id: "p3s5",
+        title: "Totales con COLLECT y tablas HASHED",
+        body: [
+          "Vamos a sumar las ventas de cada cliente. Crea <code>ZP3_TOTALES</code>:",
+          code(`REPORT zp3_totales.
+
+TYPES: BEGIN OF ty_total,
+         kunnr TYPE kna1-kunnr,
+         name1 TYPE kna1-name1,
+         netwr TYPE vbak-netwr,
+         waerk TYPE vbak-waerk,
+       END OF ty_total.
+
+DATA: lt_totales  TYPE STANDARD TABLE OF ty_total WITH DEFAULT KEY,
+      lt_clientes TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY kunnr,
+      ls_total    TYPE ty_total.
+
+START-OF-SELECTION.
+  SELECT * FROM vbak INTO TABLE @DATA(lt_pedidos).
+  SELECT * FROM kna1 INTO TABLE @lt_clientes.
+
+  LOOP AT lt_pedidos INTO DATA(ls_pedido).
+    CLEAR ls_total.
+    ls_total-kunnr = ls_pedido-kunnr.
+    ls_total-netwr = ls_pedido-netwr.
+    ls_total-waerk = ls_pedido-waerk.
+    " Leer el cliente en la tabla HASHED (búsqueda directa por clave)
+    READ TABLE lt_clientes INTO DATA(ls_cliente) WITH TABLE KEY kunnr = ls_pedido-kunnr.
+    IF sy-subrc = 0.
+      ls_total-name1 = ls_cliente-name1.
+    ENDIF.
+    " COLLECT suma los campos numéricos de las líneas con la misma clave
+    COLLECT ls_total INTO lt_totales.
+  ENDLOOP.
+
+  SORT lt_totales BY netwr DESCENDING.
+
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_alv)
+                              CHANGING  t_table      = lt_totales ).
+      lo_alv->get_functions( )->set_all( abap_true ).
+      lo_alv->get_columns( )->set_optimize( abap_true ).
+      lo_alv->get_display_settings( )->set_list_header( 'Ventas totales por cliente' ).
+      lo_alv->display( ).
+    CATCH cx_salv_msg INTO DATA(lx_msg).
+      MESSAGE lx_msg->get_text( ) TYPE 'E'.
+  ENDTRY.`),
+          syntax([
+            ["TYPE HASHED TABLE OF kna1 WITH UNIQUE KEY kunnr", "Tabla con clave única y acceso por cálculo (hash): buscar un cliente es instantáneo aunque haya millones. No se puede acceder por número de línea."],
+            ["READ TABLE ... WITH TABLE KEY kunnr = ...", "Lectura por la clave de la tabla: la forma correcta de leer una tabla HASHED o SORTED."],
+            ["COLLECT ls INTO lt.", "Si ya existe una línea con la misma clave (los campos que no son numéricos), suma los campos numéricos; si no, añade la línea. Ideal para totales."],
+            ["CLEAR ls_total.", "Deja la estructura en blanco (valores iniciales) antes de llenarla otra vez."],
+            ["WITH DEFAULT KEY", "La clave de la tabla son todos los campos de texto: así COLLECT agrupa por cliente y suma NETWR."],
+          ]),
+        ],
+        check: () => alvs("ZP3_TOTALES").length > 0,
+        hint: "Muestra el ALV de ZP3_TOTALES.",
+      },
+      {
+        id: "p3s6",
+        title: "ABAP moderno: REDUCE, FOR, FILTER, COND",
+        body: [
+          "Expresiones del ABAP actual (7.40 en adelante) que reemplazan muchos LOOPs. Crea <code>ZP3_MODERNO</code>:",
+          code(`REPORT zp3_moderno.
+
+SELECT * FROM sflight INTO TABLE @DATA(lt_vuelos).
+
+" REDUCE: sumar en una sola expresión
+DATA(lv_total) = REDUCE i( INIT s = 0 FOR v IN lt_vuelos NEXT s = s + v-seatsocc ).
+WRITE: / 'Pasajeros totales:', lv_total.
+
+" FOR + VALUE: construir una tabla nueva a partir de otra
+TYPES tt_aerolineas TYPE STANDARD TABLE OF sflight-carrid WITH EMPTY KEY.
+DATA(lt_llenos) = VALUE tt_aerolineas( FOR v IN lt_vuelos WHERE ( seatsocc > 400 ) ( v-carrid ) ).
+WRITE: / 'Vuelos con más de 400 pasajeros:', lines( lt_llenos ).
+
+" Tabla SORTED + FILTER: quedarse solo con una aerolínea
+DATA lt_ordenados TYPE SORTED TABLE OF sflight WITH NON-UNIQUE KEY carrid.
+lt_ordenados = lt_vuelos.
+DATA(lt_latam) = FILTER #( lt_ordenados WHERE carrid = CONV #( 'LA' ) ).
+WRITE: / 'Vuelos de LATAM:', lines( lt_latam ).
+
+" COND: elegir un valor según una condición
+LOOP AT lt_latam INTO DATA(ls_vuelo).
+  DATA(lv_estado) = COND string( WHEN ls_vuelo-seatsocc >= ls_vuelo-seatsmax * 9 / 10 THEN 'Casi lleno'
+                                 ELSE 'Con espacio' ).
+  WRITE: / ls_vuelo-connid, ls_vuelo-fldate, lv_estado.
+ENDLOOP.`),
+          syntax([
+            ["REDUCE i( INIT s = 0 FOR v IN lt NEXT s = s + ... )", "Recorre la tabla y acumula un resultado: INIT da el valor inicial, NEXT dice cómo se actualiza en cada vuelta."],
+            ["VALUE tt( FOR v IN lt WHERE ( ... ) ( v-campo ) )", "Construye una tabla nueva recorriendo otra, con filtro opcional."],
+            ["TYPE SORTED TABLE ... WITH NON-UNIQUE KEY", "Tabla que siempre está ordenada por su clave; las búsquedas por clave son rápidas (búsqueda binaria)."],
+            ["FILTER #( lt WHERE campo = ... )", "Devuelve las líneas que cumplen la condición. La tabla de origen debe ser SORTED o HASHED (o tener clave secundaria) por ese campo."],
+            ["CONV #( 'LA' )", "Convierte un valor al tipo que se necesita en ese lugar."],
+            ["COND tipo( WHEN ... THEN ... ELSE ... )", "Devuelve un valor según condiciones, como un IF en una expresión."],
+          ]),
+        ],
+        check: () => run("ZP3_MODERNO")?.status === "ok",
+        hint: "Ejecuta ZP3_MODERNO.",
+      },
+      {
+        id: "p3s7",
+        title: "Reto: planilla por sociedad",
+        body: [
+          "Crea <code>ZP3_RETO</code>: un reporte con pantalla de selección (SELECT-OPTIONS por sociedad) que muestre en un ALV los empleados con su nombre (PA0001-ENAME), puesto, nombre de la sociedad (T001-BUTXT) y <b>sueldo vigente</b> (PA0008-BET01 con ENDDA = '99991231'), con subtotal por sociedad y total general.",
+          "Pistas: JOIN de PA0001, PA0008 y T001 por PERNR y BUKRS; <code>add_sort( columnname = 'BUKRS' subtotal = abap_true )</code> y <code>add_aggregation( 'BET01' )</code>.",
+          `<details><summary>Ver una solución</summary><pre class="g-code">${esc(`REPORT zp3_reto.
+
+TABLES t001.
+SELECT-OPTIONS s_bukrs FOR t001-bukrs.
+
+START-OF-SELECTION.
+  " Empleados con su sociedad y su sueldo vigente (JOIN de 3 tablas)
+  SELECT p1~pernr, p1~ename, p1~stltx, p1~bukrs, t~butxt, p8~bet01, p8~waers
+    FROM pa0001 AS p1
+    INNER JOIN pa0008 AS p8 ON p8~pernr = p1~pernr
+    INNER JOIN t001   AS t  ON t~bukrs  = p1~bukrs
+    WHERE p8~endda  = '99991231'
+      AND p1~bukrs IN @s_bukrs
+    ORDER BY p1~bukrs, p1~pernr
+    INTO TABLE @DATA(lt_empleados).
+
+  IF lt_empleados IS INITIAL.
+    MESSAGE 'No hay empleados para esa selección' TYPE 'S' DISPLAY LIKE 'W'.
+    RETURN.
+  ENDIF.
+
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_alv)
+                              CHANGING  t_table      = lt_empleados ).
+      lo_alv->get_functions( )->set_all( abap_true ).
+      lo_alv->get_columns( )->set_optimize( abap_true ).
+      lo_alv->get_display_settings( )->set_list_header( 'Planilla por sociedad' ).
+      lo_alv->get_sorts( )->add_sort( columnname = 'BUKRS' subtotal = abap_true ).
+      lo_alv->get_aggregations( )->add_aggregation( 'BET01' ).
+      lo_alv->display( ).
+    CATCH cx_salv_msg cx_salv_not_found cx_salv_existing cx_salv_data_error INTO DATA(lx_error).
+      MESSAGE lx_error->get_text( ) TYPE 'E'.
+  ENDTRY.`)}</pre></details>`,
+          "¡Con esto ya manejas tablas internas y lectura de datos como en un proyecto real!",
+        ],
+        check: () => alvs("ZP3_RETO").some((a) => a.columns.includes("BET01")),
+        hint: "Muestra un ALV con la columna BET01 en ZP3_RETO.",
+      },
+    ],
+  },
 ];
 
 export function guidePanel(app, host) {
@@ -840,7 +1160,7 @@ export function guidePanel(app, host) {
             );
           }),
         ),
-        n === total ? h("div", { class: "guide-done" }, current === "p1" ? "¡Paso 1 completado! Continúa con el Paso 2 →" : "¡Paso 2 completado! Ya sabes crear reportes ALV.") : null,
+        n === total ? h("div", { class: "guide-done" }, { p1: "¡Paso 1 completado! Continúa con el Paso 2 →", p2: "¡Paso 2 completado! Continúa con el Paso 3 →", p3: "¡Paso 3 completado! Continúa con el Paso 4 →", p4: "¡Paso 4 completado! Ya programas con objetos en ABAP." }[current]) : null,
       ),
     );
     const guideEl = host.querySelector(".guide");

@@ -168,7 +168,8 @@ export class App {
     this.content.className = "content " + (screen.cls || "");
     screen.render(this.content, this);
     this.refreshChrome();
-    store.data.visited[screen.tcode || screen.id] = true;
+    if (screen.tcode) store.data.visited[screen.tcode] = true;
+    if (screen.id) store.data.visited[screen.id] = true;
     store.save();
     setTimeout(() => {
       if (screen.focus) screen.focus();
