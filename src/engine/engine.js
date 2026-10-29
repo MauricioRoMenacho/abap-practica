@@ -450,6 +450,16 @@ export class Engine {
     }
     const unsupported = [];
     for (const m of progCode.matchAll(/throw new Error\("([^"]*transpiler[^"]*)"\)/g)) unsupported.push(m[1]);
+    // SELECT con agregados (MAX, MIN, SUM...) INTO @DATA(...): el transpilador no conoce el tipo -> string
+    const aggTables = new Set([...program.source.matchAll(/INTO\s+(?:CORRESPONDING\s+FIELDS\s+OF\s+)?TABLE\s+@DATA\((\w+)\)/gi)].map((m) => m[1].toLowerCase()));
+    const fixAgg = (js) =>
+      js.replace(/let (\w+) = \(\(\) => \{ throw new Error\("Void type: SELECT_todo\d+"\) \}\)\(\)/g, (all, n) =>
+        aggTables.has(n)
+          ? `let ${n} = (() => { throw new Error("SELECT con funciones de agregado (SUM, MAX, COUNT...) INTO TABLE @DATA(${n}) no está soportado en el simulador: declare antes la tabla con TYPES/DATA y use INTO TABLE @${n}") })()`
+          : `let ${n} = new abap.types.String()`,
+      );
+    code = fixAgg(code);
+    progCode = fixAgg(progCode);
     return { code: code + "\n" + progCode, meta: chk.pp.meta, unsupported, dbgTable: chk.pp.dbgTable, tests };
   }
 

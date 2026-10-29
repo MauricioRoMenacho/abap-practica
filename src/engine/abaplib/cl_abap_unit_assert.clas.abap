@@ -58,6 +58,7 @@ CLASS cl_abap_unit_assert DEFINITION PUBLIC.
                 msg              TYPE csequence OPTIONAL
                 level            TYPE i DEFAULT 1
                 quit             TYPE i DEFAULT 1
+      PREFERRED PARAMETER exp
       RETURNING VALUE(assertion_failed) TYPE abap_bool.
     CLASS-METHODS assert_char_cp
       IMPORTING act              TYPE clike
@@ -85,11 +86,13 @@ CLASS cl_abap_unit_assert DEFINITION PUBLIC.
       IMPORTING msg    TYPE csequence OPTIONAL
                 level  TYPE i DEFAULT 1
                 quit   TYPE i DEFAULT 1
-                detail TYPE csequence OPTIONAL.
+                detail TYPE csequence OPTIONAL
+      PREFERRED PARAMETER msg.
     CLASS-METHODS abort
       IMPORTING msg    TYPE csequence OPTIONAL
                 detail TYPE csequence OPTIONAL
-                quit   TYPE i DEFAULT 1.
+                quit   TYPE i DEFAULT 1
+      PREFERRED PARAMETER msg.
   PRIVATE SECTION.
     CLASS-METHODS raise
       IMPORTING msg      TYPE csequence
