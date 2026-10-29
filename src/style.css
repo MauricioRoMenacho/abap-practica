@@ -2605,3 +2605,25 @@ body.guide-window {
 .dbg-edit { width: 100%; box-sizing: border-box; }
 .dbg-watch { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
 .dbg-watch-tag { margin-left: 6px; font-size: 10px; background: #e9730c; color: #fff; border-radius: 3px; padding: 0 4px; }
+.guide-nav { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.guide-select { flex: 1 1 0; width: 0; min-width: 0; padding: 4px 6px; border: 1px solid #b8c4d0; border-radius: 4px; font: inherit; font-size: 13px; background: #fff; }
+.gnav-btn { border: 1px solid #b8c4d0; background: #fff; border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-weight: 700; color: #0a4fa0; }
+.gnav-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ZAYUDA */
+.help-page .tab-body { padding: 12px 4px; }
+.help-err { border-bottom: 1px solid #e3e3e3; padding: 8px 0; }
+.help-err h3 { margin: 4px 0; font-size: 15px; }
+.help-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.help-bad { color: #bb0000; font-weight: 600; font-size: 12px; }
+.help-good { color: #1e6b33; font-weight: 600; font-size: 12px; }
+.exam-q { border: 1px solid #e0e0e0; border-radius: 4px; padding: 8px 10px; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.exam-q.right { border-color: #9fd1ab; background: #f3faf4; }
+.exam-q.wrong { border-color: #f0a8a8; background: #fdf3f3; }
+.exam-q label.correct .radio-l { font-weight: 700; color: #1e6b33; }
+.exam-result { padding: 10px; border-radius: 4px; font-weight: 600; display: flex; gap: 12px; align-items: center; }
+.exam-result.ok { background: #e5f4e8; color: #1e6b33; }
+.exam-result.bad { background: #fdeaea; color: #a00; }
+.cert-req li.ok { color: #1e6b33; font-weight: 600; }
+.guide-top { min-width: 0; }
+.btn:disabled { opacity: 0.5; cursor: default; }

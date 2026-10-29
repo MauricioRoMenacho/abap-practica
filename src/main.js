@@ -15,6 +15,7 @@ import { gamesScreen } from "./screens/games.js";
 import { se91Screen } from "./screens/se91.js";
 import { se37Screen } from "./screens/se37.js";
 import { se24Screen } from "./screens/se24.js";
+import { helpScreen } from "./screens/help.js";
 import { st05Screen, sm12Screen, persistTrace } from "./screens/st05.js";
 
 // guía de práctica sola, en pantalla completa (se abre en otra ventana)
@@ -71,6 +72,7 @@ async function boot() {
     SE91: (app) => se91Screen(app),
     SE37: (app) => se37Screen(app),
     SE24: (app) => se24Screen(app),
+    ZAYUDA: (app) => helpScreen(app),
     ST05: (app) => st05Screen(app),
     SM12: (app) => sm12Screen(app),
   };

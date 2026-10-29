@@ -108,6 +108,8 @@ export class App {
             ["Borrar todo y empezar de cero", () => this.resetAll()],
           ]),
           menu("Ayuda", [
+            ["Glosario, errores comunes y diferencias (ZAYUDA)", () => this.command("/nZAYUDA")],
+            ["Examen teórico y constancia", () => this.command("/nZAYUDA")],
             ["Atajos de teclado", () => this.shortcuts()],
             ["Qué soporta el simulador", () => this.limits()],
             ["Acerca de", () => this.about()],
@@ -454,8 +456,8 @@ export class App {
         "div",
         { class: "dlg-text" },
         h("p", {}, "El código ABAP se ejecuta en tu navegador gracias al transpilador open source de abaplint (ABAP → JavaScript). Soporta la gran mayoría del ABAP moderno y clásico:"),
-        h("ul", {}, h("li", {}, "DATA, TYPES, tablas internas, LOOP, READ TABLE, SORT, expresiones en línea, string templates"), h("li", {}, "Clases locales, interfaces, excepciones TRY/CATCH, FORM/PERFORM"), h("li", {}, "Open SQL: SELECT (con JOIN, GROUP BY, SUM...), INSERT, UPDATE, MODIFY, DELETE sobre tus tablas Z y las estándar"), h("li", {}, "Pantalla de selección: PARAMETERS, SELECT-OPTIONS, bloques, checkbox, radiobuttons"), h("li", {}, "Eventos: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION"), h("li", {}, "ALV con CL_SALV_TABLE (funciones, columnas, orden, totales, cebra, título)"), h("li", {}, "Programas include y depurador (puntos de parada, BREAK-POINT, F5/F6/F8)")),
-        h("p", {}, "No disponible por ahora: dynpros (CALL SCREEN), Smartforms/Adobe Forms, funciones RFC/BAPI reales, paquetes y órdenes de transporte."),
+        h("ul", {}, h("li", {}, "DATA, TYPES, tablas internas, LOOP, READ TABLE, SORT, expresiones en línea, string templates"), h("li", {}, "Clases locales, interfaces, excepciones TRY/CATCH, FORM/PERFORM"), h("li", {}, "Open SQL: SELECT (con JOIN, GROUP BY, SUM...), INSERT, UPDATE, MODIFY, DELETE sobre tus tablas Z y las estándar"), h("li", {}, "Pantalla de selección: PARAMETERS, SELECT-OPTIONS, bloques, checkbox, radiobuttons"), h("li", {}, "Eventos: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION"), h("li", {}, "ALV con CL_SALV_TABLE (funciones, columnas, orden, totales, cebra, título)"), h("li", {}, "Programas include y depurador (puntos de parada, BREAK-POINT, F5/F6/F8, cambiar valores, watchpoints)"), h("li", {}, "Módulos de función (SE37), BAPIs del modelo de vuelos, clases globales (SE24), clases de mensajes (SE91)"), h("li", {}, "Listas interactivas (AT LINE-SELECTION, HIDE), GUI_UPLOAD/GUI_DOWNLOAD, ENQUEUE/DEQUEUE (SM12), traza SQL (ST05)"), h("li", {}, "ABAP Unit (clases FOR TESTING) y ATC (revisión de calidad)")),
+        h("p", {}, "No disponible: dynpros (CALL SCREEN), Smartforms/Adobe Forms, RFC, jobs de fondo, paquetes y órdenes de transporte. Lista completa en ZAYUDA - Diferencias con SAP real."),
         h("p", { class: "hint" }, "Todo se guarda en tu navegador (localStorage). Usa Sistema → Exportar para hacer un respaldo."),
       ),
     });

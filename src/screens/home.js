@@ -10,7 +10,7 @@ const TX = [
 ];
 
 // transacciones adicionales (árbol y accesos rápidos)
-export const MORE_TX = [["SE24", "Clases globales"], ["SE37", "Módulos de función"], ["SE91", "Clases de mensajes"], ["ST05", "Traza SQL"], ["SM12", "Bloqueos"]];
+export const MORE_TX = [["SE24", "Clases globales"], ["SE37", "Módulos de función"], ["SE91", "Clases de mensajes"], ["ST05", "Traza SQL"], ["SM12", "Bloqueos"], ["ZAYUDA", "Glosario, examen y constancia"]];
 
 export function homeScreen(app) {
   return {
@@ -63,7 +63,7 @@ export function homeScreen(app) {
             h(
               "div",
               { class: "start-box", style: { marginTop: "16px" } },
-              h("div", {}, h("h2", {}, "¿Primera vez?"), h("p", {}, "Abre la ", h("b", {}, "Guía de práctica"), " (botón arriba a la derecha) y sigue el Paso 1. Cada ejercicio se marca solo cuando lo completas.")),
+              h("div", {}, h("h2", {}, "¿Primera vez?"), h("p", {}, "Abre la ", h("b", {}, "Guía de práctica"), " (botón arriba a la derecha) y empieza por el Paso 0. Cada ejercicio se marca solo cuando lo completas.")),
               h("button", { class: "btn btn-primary", onclick: () => app.toggleGuide(true) }, "Abrir la guía"),
             ),
             h("p", { class: "muted small" }, `Tus objetos: ${progs} programa(s), ${tabs} tabla(s). Tablas estándar de ejemplo: vuelos (SCARR, SFLIGHT, SBOOK...), finanzas (T001), ventas (KNA1, VBAK, VBAP), compras (LFA1, EKKO, EKPO), materiales (MARA, MAKT) y personal (PA0001, PA0002, PA0008).`),

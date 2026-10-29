@@ -4,6 +4,7 @@ import { store } from "./store.js";
 
 const code = (src) => ({ code: src.trim() });
 const syntax = (rows) => ({ syntax: rows });
+const terms = (rows, title = "Conceptos clave") => ({ syntax: rows, title });
 
 const prog = (n) => store.program(n);
 const run = (n) => store.data.runs[n];
@@ -18,6 +19,100 @@ const countRows = (app, t) => {
 };
 
 export const GUIDES = [
+  {
+    id: "p0",
+    title: "Paso 0",
+    subtitle: "Conceptos: qué es SAP y cómo está organizado",
+    steps: [
+      {
+        id: "p0s1",
+        title: "SAP, módulos y ABAP",
+        body: [
+          "<b>SAP</b> es un <b>ERP</b>: un sistema que integra todos los procesos de una empresa en una sola base de datos. Cuando ventas registra un pedido, almacén ve la salida de mercadería y contabilidad ve la factura, sin pasar datos de un sistema a otro.",
+          "Está dividido en <b>módulos</b> funcionales. Los más comunes:",
+          terms([
+            ["FI / CO", "Finanzas (contabilidad, cuentas por cobrar y pagar) y Controlling (costos)."],
+            ["SD", "Ventas y distribución: clientes, pedidos (tablas VBAK/VBAP), entregas, facturas. Clientes en KNA1."],
+            ["MM", "Gestión de materiales: compras (EKKO/EKPO), proveedores (LFA1), inventario. Materiales en MARA/MAKT."],
+            ["PP / QM / PM", "Producción, calidad y mantenimiento."],
+            ["HCM", "Recursos humanos: infotipos de personal (PA0001, PA0002, PA0008...)."],
+          ]),
+          "<b>ABAP</b> es el lenguaje de programación de SAP. Con ABAP se crean reportes, interfaces, formularios, ampliaciones y programas a medida (lo que los consultores llaman <b>desarrollos RICEFW</b>: Reports, Interfaces, Conversions, Enhancements, Forms, Workflows). Las versiones del sistema han sido R/3, ECC y hoy <b>S/4HANA</b>; el ABAP que aprendes aquí funciona en todas.",
+          "Un <b>consultor funcional</b> configura el módulo y define qué se necesita; el <b>consultor técnico ABAP</b> (tú) lo programa a partir de una <b>especificación funcional</b>.",
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+      {
+        id: "p0s2",
+        title: "Arquitectura de 3 capas",
+        body: [
+          "Un sistema SAP tiene tres capas separadas:",
+          terms([
+            ["1. Presentación", "Lo que ve el usuario: SAP GUI (la ventana clásica que imita este simulador), el navegador (Fiori / SAPUI5) o Eclipse (ADT) para los desarrolladores. No contiene lógica."],
+            ["2. Aplicación", "El servidor de aplicaciones ABAP: aquí se ejecutan los programas. Lo forman <b>procesos de trabajo</b>: de diálogo (usuarios conectados), de fondo (jobs, SM36/SM37), de actualización, de bloqueo (enqueue, SM12) y de impresión (spool)."],
+            ["3. Base de datos", "Guarda tablas, datos y también el código de los programas (el repositorio). En S/4HANA es SAP HANA. ABAP accede con Open SQL (SELECT, INSERT...) independiente de la base de datos."],
+          ]),
+          "Consecuencia práctica: cada viaje de la capa de aplicación a la base de datos cuesta tiempo. Por eso se insiste tanto en evitar SELECT dentro de LOOP (lo verás en ST05, Paso 5).",
+          "En este simulador las tres capas corren en tu navegador: la pantalla (presentación), el motor que traduce ABAP a JavaScript (aplicación) y una base de datos SQLite (base de datos).",
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+      {
+        id: "p0s3",
+        title: "Mandante (cliente)",
+        body: [
+          "Un mismo sistema SAP puede contener varios <b>mandantes</b> (en inglés <i>client</i>): divisiones lógicas con sus propios datos, como si fueran empresas separadas. Al iniciar sesión se elige uno; aquí siempre es el <b>100</b> (lo ves abajo a la derecha: NPL (1) 100).",
+          terms([
+            ["Campo MANDT", "La primera clave de casi todas las tablas de negocio es MANDT (tipo CLNT). Por eso al crear tablas en SE11 empiezas con MANDT."],
+            ["Dependiente de mandante", "Datos de negocio y casi toda la configuración: cada mandante tiene los suyos (clientes, pedidos...)."],
+            ["Independiente de mandante", "El repositorio: programas, clases, definiciones de tablas. Un programa creado en SE38 existe en todos los mandantes del sistema."],
+            ["Open SQL y MANDT", "No se escribe WHERE mandt = ...: Open SQL filtra automáticamente por el mandante de la sesión (sy-mandt)."],
+          ]),
+          "Ejemplo típico: mandante 100 para desarrollo, 200 para pruebas unitarias con datos y 000 (mandante de SAP).",
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+      {
+        id: "p0s4",
+        title: "Paisaje de sistemas DEV - QAS - PRD y transportes",
+        body: [
+          "En una empresa nunca se programa en el sistema real. Hay al menos tres sistemas:",
+          terms([
+            ["DEV (desarrollo)", "Donde programas y configuras. Aquí sí puedes crear y modificar objetos."],
+            ["QAS (calidad / pruebas)", "Copia cercana a producción donde los usuarios prueban los cambios."],
+            ["PRD (producción)", "El sistema real de la empresa. No se modifica directamente."],
+          ]),
+          "Los cambios viajan de DEV a QAS y luego a PRD mediante <b>órdenes de transporte</b> (transacciones SE09/SE10 para gestionarlas y STMS para importarlas). Por eso en SAP real, al crear un objeto, el sistema pide un <b>paquete</b> (agrupación de objetos, como ZVENTAS) y una <b>orden de transporte</b>. Si eliges \"Objeto local\" (paquete $TMP), el objeto no se puede transportar: solo sirve para pruebas.",
+          "En este simulador no hay paquetes ni órdenes porque solo existe un sistema (NPL, como el sistema de prueba que SAP ofrece para aprender). Ten en cuenta este paso cuando trabajes en un proyecto real.",
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+      {
+        id: "p0s5",
+        title: "Objetos, nombres Z/Y y transacciones",
+        body: [
+          "Todo lo que se crea (programas, tablas, clases, funciones) es un <b>objeto del repositorio</b>. Los objetos de SAP empiezan por cualquier letra; los tuyos deben empezar por <b>Z</b> o <b>Y</b> (espacio de nombres del cliente) para que las actualizaciones de SAP no los sobrescriban.",
+          "Transacciones de desarrollo que usarás (escríbelas en el campo de comandos; <code>/n</code> delante cambia de transacción, <code>/o</code> abre otra sesión):",
+          terms([
+            ["SE38 / SE80", "Editor ABAP de programas / Object Navigator (todos los objetos)."],
+            ["SE11", "Diccionario ABAP: tablas, elementos de datos, dominios."],
+            ["SE16 / SE16N", "Ver y mantener el contenido de las tablas."],
+            ["SE37 / SE24", "Módulos de función / Clases globales."],
+            ["SE91", "Clases de mensajes."],
+            ["SE84", "Sistema de información del repositorio (buscar objetos)."],
+            ["ST05 / SM12 / ST22", "Traza SQL / Bloqueos / Dumps (errores en tiempo de ejecución)."],
+          ]),
+          "Consulta en cualquier momento <b>Ayuda - Glosario, errores comunes y diferencias</b> (transacción <code>ZAYUDA</code>).",
+        ],
+        check: () => !!store.data.visited?.ZAYUDA,
+        hint: "Abre la transacción ZAYUDA.",
+      },
+    ],
+  },
   {
     id: "p1",
     title: "Paso 1",
@@ -2075,6 +2170,125 @@ WRITE: / 'Contador:', lv_contador,
       },
     ],
   },
+  {
+    id: "p8",
+    title: "Proyecto final",
+    subtitle: "Sistema de reservas de vuelos (proyecto completo)",
+    steps: [
+      {
+        id: "p8s0",
+        title: "La especificación funcional",
+        body: [
+          "Ahora trabajarás como en un proyecto real: no hay código para copiar, solo la <b>especificación</b> de lo que el cliente necesita. Usa todo lo aprendido y consulta los pasos anteriores cuando lo necesites.",
+          "<b>Requerimiento:</b> la agencia de viajes quiere registrar reservas de sus clientes en los vuelos existentes (SFLIGHT), cancelarlas y ver un reporte.",
+          terms([
+            ["Datos", "Tabla ZRESERVAS con: número de reserva, vuelo (aerolínea, conexión, fecha), cliente (SCUSTOM), cantidad de asientos y estado (R = reservada, C = cancelada)."],
+            ["Reglas", "El vuelo debe existir; el cliente debe existir; no se pueden reservar más asientos que los libres (SEATSMAX - SEATSOCC); una reserva cancelada no se puede volver a cancelar."],
+            ["Mensajes", "Todos los mensajes en una clase de mensajes, nada de textos fijos en el código."],
+            ["Calidad", "Lógica en una clase global con pruebas unitarias y sin errores de ATC de prioridad 1 y 2."],
+          ]),
+          "Cada paso de este proyecto se valida automáticamente. Al terminarlo todo (y aprobar el examen teórico en ZAYUDA) podrás generar tu <b>constancia de práctica</b>.",
+        ],
+        check: () => false,
+        hint: "Lee la especificación y pulsa Marcar como hecho.",
+      },
+      {
+        id: "p8s1",
+        title: "1. Diccionario: dominio y tabla ZRESERVAS",
+        body: [
+          "En SE11 crea:",
+          "a) Dominio <code>ZD_ESTADO_RES</code>: CHAR 1 con valores fijos <code>R</code> (Reservada) y <code>C</code> (Cancelada), y el elemento de datos <code>ZDE_ESTADO_RES</code> que lo use.<br>b) Tabla <code>ZRESERVAS</code> con los campos: MANDT (clave), ID NUMC 6 (clave), CARRID, CONNID, FLDATE (puedes referenciar tipos como en SFLIGHT: CHAR 3, NUMC 4, DATS), CUSTOMID NUMC 8, SEATS INT4 y ESTADO con el elemento <code>ZDE_ESTADO_RES</code>.",
+          "Opcional (recomendado): pon SCARR como tabla de verificación de CARRID y SCUSTOM para CUSTOMID.",
+        ],
+        check: () => {
+          const t = store.data.tables?.ZRESERVAS;
+          if (!t || !t.active) return false;
+          const f = (t.active.fields || t.fields || []).map((x) => x.name);
+          return ["MANDT", "ID", "CARRID", "CONNID", "FLDATE", "CUSTOMID", "SEATS", "ESTADO"].every((x) => f.includes(x)) && !!store.data.domains?.ZD_ESTADO_RES;
+        },
+        hint: "Activa el dominio ZD_ESTADO_RES y la tabla ZRESERVAS con todos los campos.",
+      },
+      {
+        id: "p8s2",
+        title: "2. Clase de mensajes ZRESERVAS",
+        body: [
+          "En SE91 crea la clase <code>ZRESERVAS</code> con al menos estos mensajes (usa &amp;1, &amp;2 para los valores):",
+          terms([
+            ["001", "El vuelo &1 &2 del &3 no existe"],
+            ["002", "El cliente &1 no existe"],
+            ["003", "Solo quedan &1 asientos libres"],
+            ["004", "Reserva &1 creada correctamente"],
+            ["005", "La reserva &1 ya está cancelada"],
+            ["006", "Reserva &1 cancelada"],
+            ["007", "El registro está bloqueado por &1"],
+          ]),
+        ],
+        check: () => Object.keys(store.data.msgClasses?.ZRESERVAS?.messages || {}).length >= 6,
+        hint: "Crea ZRESERVAS en SE91 con al menos 6 mensajes.",
+      },
+      {
+        id: "p8s3",
+        title: "3. Clase global ZCL_RESERVAS",
+        body: [
+          "En SE24 crea <code>ZCL_RESERVAS</code> con, como mínimo:",
+          terms([
+            ["crear", "IMPORTING vuelo (carrid, connid, fldate), cliente y asientos; RETURNING el número de reserva. Valida las reglas y, si algo falla, lanza una excepción (por ejemplo una clase ZCX_RESERVAS creada también en SE24) o devuelve los mensajes. Calcula el siguiente ID con SELECT MAX( id ) y actualiza SEATSOCC en SFLIGHT."],
+            ["cancelar", "IMPORTING el ID; cambia ESTADO a 'C' y devuelve los asientos al vuelo."],
+            ["asientos_libres", "IMPORTING el vuelo; RETURNING seatsmax - seatsocc. Será fácil de probar."],
+          ]),
+          "Pista de diseño: separa las validaciones en métodos pequeños (vuelo_existe, cliente_existe); así podrás probarlos uno por uno.",
+        ],
+        check: () => {
+          const c = store.data.classes?.ZCL_RESERVAS?.activeSource || "";
+          return /METHODS\s+crear\b/i.test(c) && /METHODS\s+cancelar\b/i.test(c);
+        },
+        hint: "Activa ZCL_RESERVAS con los métodos crear y cancelar.",
+      },
+      {
+        id: "p8s4",
+        title: "4. Programa de alta y cancelación",
+        body: [
+          "Crea <code>ZRESERVAS_ALTA</code> con una pantalla de selección: botones de opción Crear / Cancelar, campos del vuelo, cliente, asientos e ID de reserva. Requisitos:",
+          "- Usa <code>MESSAGE-ID zreservas</code> y solo mensajes de la clase.<br>- Valida en <code>AT SELECTION-SCREEN</code> que los campos obligatorios estén llenos.<br>- Bloquea el vuelo con <code>ENQUEUE_E_TABLE</code> antes de modificar y desbloquéalo al terminar (prueba simulando un bloqueo en SM12).<br>- Llama a ZCL_RESERVAS y confirma con <code>COMMIT WORK</code>, o <code>ROLLBACK WORK</code> si hubo error.<br>- Guarda una variante con tus valores de prueba.",
+        ],
+        check: (app) => run("ZRESERVAS_ALTA")?.status === "ok" && activeHas("ZRESERVAS_ALTA", /zcl_reservas/i) && activeHas("ZRESERVAS_ALTA", /ENQUEUE_E_TABLE/i) && activeHas("ZRESERVAS_ALTA", /MESSAGE-ID\s+zreservas/i) && countRows(app, "ZRESERVAS") > 0,
+        hint: "Ejecuta ZRESERVAS_ALTA y crea al menos una reserva.",
+      },
+      {
+        id: "p8s5",
+        title: "5. Reporte ALV de reservas",
+        body: [
+          "Crea <code>ZRESERVAS_LISTA</code>: SELECT-OPTIONS por aerolínea y fecha, un JOIN entre ZRESERVAS, SCUSTOM (nombre del cliente) y SCARR (nombre de la aerolínea), y muéstralo en un ALV con <code>cl_salv_table</code>: funciones estándar activas, columnas optimizadas, títulos de columna claros y orden por fecha. Muestra las canceladas también, pero que se distingan (por ejemplo, ordenadas o con una columna de texto del estado).",
+          "Opcional: si no hay reservas para la selección, muestra un mensaje de tipo S y no el ALV vacío.",
+        ],
+        check: () => alvs("ZRESERVAS_LISTA").length > 0 && activeHas("ZRESERVAS_LISTA", /JOIN/i) && activeHas("ZRESERVAS_LISTA", /SELECT-OPTIONS/i),
+        hint: "Muestra el ALV de ZRESERVAS_LISTA con JOIN y SELECT-OPTIONS.",
+      },
+      {
+        id: "p8s6",
+        title: "6. Pruebas unitarias",
+        body: [
+          "Crea <code>ZRESERVAS_TEST</code>: un programa con una clase de prueba <code>ltc_reservas</code> (FOR TESTING) que pruebe ZCL_RESERVAS. Mínimo 3 pruebas en verde, por ejemplo: asientos_libres de un vuelo conocido, que crear con un cliente inexistente falle, y que no se pueda reservar más que los asientos libres.",
+          "Para que una prueba que espera un error sea correcta, captura la excepción con TRY ... CATCH y usa <code>cl_abap_unit_assert=&gt;fail( )</code> si no se produjo.",
+        ],
+        check: () => (store.data.quality?.unit?.ZRESERVAS_TEST?.total || 0) >= 3 && store.data.quality.unit.ZRESERVAS_TEST.failed === 0,
+        hint: "Ejecuta ABAP Unit en ZRESERVAS_TEST con 3 pruebas o más en verde.",
+      },
+      {
+        id: "p8s7",
+        title: "7. Control de calidad (ATC)",
+        body: [
+          "Ejecuta el <b>ATC</b> sobre ZRESERVAS_ALTA y ZRESERVAS_LISTA y corrige todo hasta que no queden mensajes de prioridad 1 ni 2. Revisa también los de prioridad 3 (nombres, código comentado).",
+          "Cuando termines, abre <b>ZAYUDA - Examen</b>, apruébalo y genera tu constancia.",
+        ],
+        check: () => ["ZRESERVAS_ALTA", "ZRESERVAS_LISTA"].every((n) => {
+          const q = store.data.quality?.atc?.[n];
+          return !!q && q.p1 === 0 && q.p2 === 0;
+        }),
+        hint: "Deja ZRESERVAS_ALTA y ZRESERVAS_LISTA sin mensajes ATC de prioridad 1 y 2.",
+      },
+    ],
+  },
 ];
 
 // ---- "Hazlo tú": ejercicios sin código para copiar al final de cada paso ----
@@ -2110,7 +2324,8 @@ export async function openGame(app, id) {
 }
 
 export function guidePanel(app, host) {
-  let current = localStorage.getItem("abapp.guideTab") || "p1";
+  let current = localStorage.getItem("abapp.guideTab") || "p0";
+  if (!GUIDES.some((x) => x.id === current)) current = "p0";
   // el ejercicio abierto y la posición de scroll se recuerdan al recargar
   const stepKey = () => "abapp.guideStep." + current;
   let openStep = localStorage.getItem(stepKey()) || null;
@@ -2202,31 +2417,33 @@ export function guidePanel(app, host) {
         h(
           "div",
           { class: "guide-top" },
-          h(
-            "div",
-            { class: "guide-tabs" },
-            GUIDES.map((x) => {
-              const xn = x.steps.filter((s) => d[s.id]).length;
-              return h(
-                "button",
-                {
-                  class: "gtab" + (x.id === current ? " active" : ""),
-                  onclick: () => {
-                    const g0 = host.querySelector(".guide");
-                    if (g0) localStorage.setItem("abapp.guideScroll." + current, String(g0.scrollTop));
-                    current = x.id;
-                    openStep = localStorage.getItem(stepKey()) || null;
-                    savedScroll = Number(localStorage.getItem("abapp.guideScroll." + current)) || 0;
-                    localStorage.setItem("abapp.guideTab", current);
-                    host.replaceChildren();
-                    render();
-                  },
-                },
-                x.title,
-                h("span", { class: "gtab-count" }, `${xn}/${x.steps.length}`),
-              );
-            }),
-          ),
+          (() => {
+            const switchTo = (id) => {
+              const g0 = host.querySelector(".guide");
+              if (g0) localStorage.setItem("abapp.guideScroll." + current, String(g0.scrollTop));
+              current = id;
+              openStep = localStorage.getItem(stepKey()) || null;
+              savedScroll = Number(localStorage.getItem("abapp.guideScroll." + current)) || 0;
+              localStorage.setItem("abapp.guideTab", current);
+              host.replaceChildren();
+              render();
+            };
+            const idx = GUIDES.findIndex((x) => x.id === current);
+            return h(
+              "div",
+              { class: "guide-tabs guide-nav" },
+              h("button", { class: "gnav-btn", title: "Paso anterior", disabled: idx <= 0, onclick: () => switchTo(GUIDES[idx - 1].id) }, "<"),
+              h(
+                "select",
+                { class: "guide-select", title: "Elegir paso de la guía", onchange: (e) => switchTo(e.target.value) },
+                GUIDES.map((x) => {
+                  const xn = x.steps.filter((s) => d[s.id]).length;
+                  return h("option", { value: x.id, selected: x.id === current }, `${x.title} - ${x.subtitle.split(":")[0]} (${xn}/${x.steps.length})${xn === x.steps.length ? " - completo" : ""}`);
+                }),
+              ),
+              h("button", { class: "gnav-btn", title: "Paso siguiente", disabled: idx >= GUIDES.length - 1, onclick: () => switchTo(GUIDES[idx + 1].id) }, ">"),
+            );
+          })(),
           h(
             "div",
             { class: "guide-actions" },
@@ -2283,7 +2500,7 @@ export function guidePanel(app, host) {
                           ? h(
                               "details",
                               { class: "g-syntax", open: true },
-                              h("summary", {}, "Explicación de la sintaxis"),
+                              h("summary", {}, b.title || "Explicación de la sintaxis"),
                               h(
                                 "dl",
                                 {},
