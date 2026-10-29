@@ -2687,3 +2687,4 @@ body.guide-window {
 .btn-primary:hover:not(:disabled) { background: linear-gradient(#f8fbfe, #c3d9ef); border-color: #356a9c; }
 .btn-primary .ico { --ic: currentColor !important; }
 .ico-unit::before { -webkit-mask: none !important; mask: none !important; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 1.5h4M7 1.5v4.2L3 13a1 1 0 0 0 .9 1.5h8.2A1 1 0 0 0 13 13L9 5.7V1.5' fill='%23fff' stroke='%234a5b6c' stroke-width='1'/%3E%3Cpath d='M4.6 10.5h6.8l1.2 2.3a.6.6 0 0 1-.5.9H3.9a.6.6 0 0 1-.5-.9z' fill='%234caf50'/%3E%3C/svg%3E") center / contain no-repeat !important; }
+.grid-table tr.grp td { background: #eef2f6; }

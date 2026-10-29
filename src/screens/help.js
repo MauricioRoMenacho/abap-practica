@@ -1,6 +1,7 @@
 // ZAYUDA - Glosario, errores comunes, diferencias con SAP real, examen y constancia.
 import { h, esc } from "../ui.js";
 import { store } from "../store.js";
+import { NAMING, NAMING_WHY } from "../naming.js";
 
 const GLOSARIO = [
   ["ABAP", "Advanced Business Application Programming: lenguaje de programación de SAP."],
@@ -101,7 +102,7 @@ export function helpScreen(app, initialTab = "glos") {
   let answers = {};
   let submitted = false;
   const render = () => {
-    const tabs = h("div", { class: "tabs" }, [["glos", "Glosario"], ["err", "Errores comunes"], ["dif", "Diferencias con SAP real"], ["exam", "Examen teórico"], ["cert", "Constancia"]].map(([k, l]) => h("button", { class: "tab" + (tab === k ? " active" : ""), onclick: () => { tab = k; render(); } }, l)));
+    const tabs = h("div", { class: "tabs" }, [["glos", "Glosario"], ["names", "Nombres (lv_, ls_...)"], ["err", "Errores comunes"], ["dif", "Diferencias con SAP real"], ["exam", "Examen teórico"], ["cert", "Constancia"]].map(([k, l]) => h("button", { class: "tab" + (tab === k ? " active" : ""), onclick: () => { tab = k; render(); } }, l)));
     let content;
     if (tab === "glos") {
       let q = "";
@@ -109,6 +110,18 @@ export function helpScreen(app, initialTab = "glos") {
       const fill = () => list.replaceChildren(h("table", { class: "grid-table" }, h("tbody", {}, GLOSARIO.filter(([t, d]) => !q || (t + d).toLowerCase().includes(q)).map(([t, d]) => h("tr", {}, h("td", { style: { width: "220px" } }, h("b", {}, t)), h("td", {}, d))))));
       fill();
       content = h("div", {}, h("input", { class: "sap-input", placeholder: "Buscar término...", style: { width: "300px", marginBottom: "8px" }, oninput: (e) => { q = e.target.value.toLowerCase(); fill(); } }), list);
+    } else if (tab === "names") {
+      content = h(
+        "div",
+        {},
+        NAMING_WHY.map((t) => h("p", { html: t })),
+        h(
+          "table",
+          { class: "grid-table" },
+          h("thead", {}, h("tr", {}, ["Prefijo", "Significado", "Ejemplo", "Por qué"].map((x) => h("th", {}, x)))),
+          h("tbody", {}, NAMING.map(([p, m, ej, why]) => (m ? h("tr", {}, h("td", { class: "mono" }, h("b", {}, p)), h("td", {}, m), h("td", { class: "mono" }, ej), h("td", {}, why)) : h("tr", { class: "grp" }, h("td", { colspan: 4 }, h("b", {}, p)))))),
+        ),
+      );
     } else if (tab === "err") {
       content = h(
         "div",

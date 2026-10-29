@@ -1,4 +1,5 @@
 // Guías de práctica paso a paso con validación automática.
+import { NAMING_WHY, namingTerms } from "./naming.js";
 import { h, esc } from "./ui.js";
 import { store } from "./store.js";
 
@@ -250,10 +251,24 @@ ENDDO.`),
             ['DO n TIMES. ... ENDDO.', 'Bucle que se repite n veces. <code>sy-index</code> indica el número de vuelta actual.'],
           ]),
           "Tipos básicos: <code>i</code> (entero), <code>p</code> (decimal empaquetado), <code>c</code> (texto fijo), <code>string</code> (texto variable), <code>d</code> (fecha), <code>t</code> (hora).",
+          "¿Por qué <code>lv_</code>? Es una convención: <b>l</b> = local, <b>v</b> = variable simple (un valor). Verás también <code>ls_</code> (estructura), <code>lt_</code> (tabla), <code>gv_</code> (global), <code>iv_</code>/<code>ev_</code> (parámetros que entran/salen)... El siguiente ejercicio explica cada uno y por qué se usan.",
           "Experimenta: cambia la edad a 15, divide entre cero (<code>lv_total = 1 / 0.</code>) y mira el <b>dump</b> que aparece, como en la transacción ST22.",
         ],
         check: () => run("ZP1_VARIABLES")?.status === "ok" && activeHas("ZP1_VARIABLES", /DATA/i),
         hint: "Crea, activa y ejecuta ZP1_VARIABLES.",
+      },
+      {
+        id: "p1s5n",
+        title: "Convenciones de nombres: por qué lv_, ls_, lt_, iv_, ev_...",
+        body: [
+          ...NAMING_WHY,
+          "Cómo se forma un nombre: <b>alcance + tipo + _ + nombre descriptivo</b>. Por ejemplo <code>lt_vuelos</code> = <b>l</b>ocal + <b>t</b>abla + vuelos; <code>iv_carrid</code> = parámetro de entrada (<b>i</b>mporting) + <b>v</b>alor + carrid.",
+          { syntax: namingTerms(), title: "Tabla de prefijos" },
+          "Prueba: en <code>ZP1_VARIABLES</code> cambia <code>lv_total</code> por <code>total</code> en todas las líneas y ejecuta: funciona igual. El prefijo no lo exige el compilador, lo exige el equipo. En el Paso 6 verás que el <b>ATC</b> avisa cuando una variable local no sigue la convención.",
+          "Cada empresa puede tener su propia variante (algunas usan <code>wa_</code> para estructuras o <code>it_</code> para tablas en código antiguo). Lo importante es ser consistente: consulta siempre la guía de nombres del proyecto. Tienes esta tabla en <b>ZAYUDA - Nombres</b>.",
+        ],
+        check: () => false,
+        hint: "Lee la explicación y pulsa Marcar como hecho.",
       },
       {
         id: "p1s6",
@@ -1177,6 +1192,7 @@ START-OF-SELECTION.
             ["NEW lcl_cuenta( ... )", "Crea el objeto (forma moderna) en una expresión."],
             ["lo_cuenta1->depositar( lv_monto )", "<code>-&gt;</code> llama a un método del objeto. Con un solo parámetro no hace falta escribir su nombre."],
             ["TYPES ty_monto TYPE p LENGTH 10 DECIMALS 2.", "Un tipo propio para los importes: así todos los parámetros y atributos usan exactamente el mismo tipo."],
+            ["iv_ / rv_ / mv_ / lo_ / lcl_", "Convención de nombres: <b>iv_</b> parámetro que entra (importing), <b>rv_</b> valor devuelto (returning), <b>mv_</b> atributo del objeto (member: cada objeto tiene el suyo), <b>lo_</b> referencia local a un objeto, <b>lcl_</b> clase local. Al leer <code>mv_saldo = mv_saldo + iv_monto</code> sabes que se modifica el atributo con el dato recibido."],
           ]),
         ],
         check: () => run("ZP4_CLASES")?.status === "ok" && activeHas("ZP4_CLASES", /CLASS\s+\w+\s+DEFINITION/i),
@@ -1539,6 +1555,7 @@ WRITE: / 'Precio original:', p_precio,
             ["IMPORTING", "Lo que el programa <b>recibe</b> (los parámetros de <b>exportación</b> de la función)."],
             ["EXCEPTIONS nombre = 1 OTHERS = 2", "Si la función ejecuta RAISE nombre, el programa no se cae: sy-subrc toma el número indicado. OTHERS captura cualquier otra excepción."],
             ["RAISE porcentaje_invalido.", "Dentro de la función: termina la función y avisa al llamador con esa excepción."],
+            ["IV_ / EV_ / CV_ / IT_ / ET_", "Convención para parámetros: <b>I</b>mporting, <b>E</b>xporting, <b>C</b>hanging + <b>V</b>alor o <b>T</b>abla. En la llamada se ve enseguida qué datos envías y cuáles recibes. Las BAPIs de SAP no siguen esta convención (usan nombres como AIRLINE o RETURN): es código estándar antiguo."],
             ["IF sy-subrc <> 0.", "Siempre revisa sy-subrc después de CALL FUNCTION con EXCEPTIONS."],
             ["Interfase local (*\"...)", "El comentario que SE37 genera al principio del código describe los parámetros. No lo edites a mano: se regenera desde las pestañas."],
           ]),
