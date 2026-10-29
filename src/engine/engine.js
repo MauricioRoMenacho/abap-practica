@@ -60,11 +60,64 @@ export class Engine {
   constructor({ libFiles, createDbClient, onDbChange, locks, onLocksChange }) {
     this.libFiles = libFiles; // [{filename, contents}]
     this.locks = locks || []; // bloqueos (SM12)
+    this.sqlTrace = { active: false, records: [] }; // traza SQL (ST05)
     this.onLocksChange = onLocksChange;
     this.createDbClient = createDbClient;
     this.onDbChange = onDbChange;
     this.db = null;
     this.libReg = null;
+  }
+
+  // ---------------- traza SQL (ST05) ----------------
+  tracedDb(progName) {
+    const db = this.db;
+    const tr = this.sqlTrace;
+    const rec = (r) => {
+      tr.records.push({ at: new Date().toISOString(), program: progName, ...r });
+      if (tr.records.length > 3000) tr.records.splice(0, tr.records.length - 3000);
+    };
+    const fromTable = (sql) => (sql.match(/\bFROM\s+[`'"]?([A-Za-z0-9_\/]+)/i)?.[1] || "").toUpperCase();
+    const wrap = {
+      select: async (o) => {
+        const t0 = performance.now();
+        const r = await db.select(o);
+        rec({ op: "SELECT", table: fromTable(o.select), sql: o.select, rows: r.rows.length, us: Math.round((performance.now() - t0) * 1000) });
+        return r;
+      },
+      insert: async (o) => {
+        const t0 = performance.now();
+        const r = await db.insert(o);
+        rec({ op: "INSERT", table: String(o.table).replace(/['"`]/g, "").toUpperCase(), sql: `INSERT INTO ${o.table} (${o.columns.join(", ")}) VALUES (${o.values.join(", ")})`, rows: r.dbcnt, us: Math.round((performance.now() - t0) * 1000) });
+        return r;
+      },
+      update: async (o) => {
+        const t0 = performance.now();
+        const r = await db.update(o);
+        rec({ op: "UPDATE", table: String(o.table).replace(/['"`]/g, "").toUpperCase(), sql: `UPDATE ${o.table} SET ${o.set.join(", ")} WHERE ${o.where}`, rows: r.dbcnt, us: Math.round((performance.now() - t0) * 1000) });
+        return r;
+      },
+      delete: async (o) => {
+        const t0 = performance.now();
+        const r = await db.delete(o);
+        rec({ op: "DELETE", table: String(o.table).replace(/['"`]/g, "").toUpperCase(), sql: `DELETE FROM ${o.table}${o.where ? " WHERE " + o.where : ""}`, rows: r.dbcnt, us: Math.round((performance.now() - t0) * 1000) });
+        return r;
+      },
+      commit: async () => {
+        rec({ op: "COMMIT", table: "", sql: "COMMIT WORK", rows: 0, us: 0 });
+        return db.commit();
+      },
+      rollback: async () => {
+        rec({ op: "ROLLBACK", table: "", sql: "ROLLBACK WORK", rows: 0, us: 0 });
+        return db.rollback();
+      },
+    };
+    return new Proxy(db, {
+      get(t, k) {
+        if (k in wrap) return wrap[k];
+        const v = t[k];
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
   }
 
   // ---------------- base de datos ----------------
@@ -355,7 +408,7 @@ export class Engine {
     globalThis.abap = abap;
     // textos de las clases de mensajes (SE91)
     abap.MSAG = ctx.msgTexts || {};
-    abap.context.databaseConnections["DEFAULT"] = this.db;
+    abap.context.databaseConnections["DEFAULT"] = this.sqlTrace?.active ? this.tracedDb(program.name) : this.db;
     const sy = abap.builtin.sy.get();
     const now = new Date();
     const p2 = (n) => String(n).padStart(2, "0");
@@ -619,6 +672,7 @@ export class Engine {
       else result = { status: "dump", dump: await describeDump(e, abap, comp.unsupported) };
     }
     this.__releaseOwnLocks?.();
+    if (this.sqlTrace?.active) this.onTraceChange?.(this.sqlTrace);
     try {
       await this.db.commit?.();
     } catch {

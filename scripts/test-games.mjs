@@ -2,10 +2,11 @@ import fs from "fs"; import path from "path";
 import { Engine } from "../src/engine/engine.js";
 import { SQLiteDatabaseClient } from "@abaplint/database-sqlite";
 import { STANDARD_TABLES } from "../src/engine/standard.js";
+import { stdLibFiles } from "../src/engine/stdlib.js";
 import { GAMES, fillSolution, compareOutput, normLine, MAX_POINTS } from "../src/games/data.js";
 const dir = "src/engine/abaplib";
 const libFiles = fs.readdirSync(dir).map(f => ({ filename: f, contents: fs.readFileSync(path.join(dir, f), "utf8") }));
-const eng = new Engine({ libFiles, createDbClient: () => new SQLiteDatabaseClient() });
+const eng = new Engine({ libFiles: [...libFiles, ...stdLibFiles()], createDbClient: () => new SQLiteDatabaseClient() });
 await eng.openDb();
 const zal = { name: "ZALUMNOS", description: "Alumnos", fields: [
   { name: "MANDT", type: "CLNT", key: true }, { name: "ID", type: "NUMC", length: 4, key: true },

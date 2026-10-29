@@ -1398,6 +1398,356 @@ START-OF-SELECTION.
       },
     ],
   },
+  {
+    id: "p5",
+    title: "Paso 5",
+    subtitle: "Herramientas del día a día y buenas prácticas",
+    steps: [
+      {
+        id: "p5s1",
+        title: "Tu primer módulo de función (SE37)",
+        body: [
+          "Un <b>módulo de función</b> es código reutilizable con una interfaz fija que cualquier programa puede llamar con <code>CALL FUNCTION</code>. Vive dentro de un <b>grupo de funciones</b> (un contenedor que comparte datos globales). Es la forma clásica de reutilizar lógica en SAP y la base de las BAPIs.",
+          "1. Abre <b>SE37</b>, escribe <code>Z_CALCULAR_DESCUENTO</code> y pulsa <b>Crear</b>.<br>2. Con el botón <b>Crear grupo</b> crea el grupo <code>ZFG_PRACTICA</code> (texto: Funciones de práctica). Texto breve del módulo: Calcula precio con descuento.<br>3. Pestaña <b>Importación</b>: <code>IV_PRECIO</code> tipo <code>SFLIGHT-PRICE</code> y <code>IV_PORCENTAJE</code> tipo <code>I</code>.<br>4. Pestaña <b>Exportación</b>: <code>EV_PRECIO_FINAL</code> tipo <code>SFLIGHT-PRICE</code>.<br>5. Pestaña <b>Excepciones</b>: <code>PORCENTAJE_INVALIDO</code>.<br>6. Pestaña <b>Código fuente</b>: escribe el cuerpo entre el comentario de la interfaz y ENDFUNCTION:",
+          code(`  IF iv_porcentaje < 0 OR iv_porcentaje > 100.
+    RAISE porcentaje_invalido.
+  ENDIF.
+  ev_precio_final = iv_precio - iv_precio * iv_porcentaje / 100.`),
+          "7. <b>Activar</b> (Ctrl+F3) y pruébalo con <b>Probar</b> (F8): precio 500, porcentaje 20. Debe devolver 400,00. Prueba también con 150 para ver la excepción.",
+          "8. Ahora llámalo desde un programa <code>ZP5_FUNCION</code> (SE38):",
+          code(`REPORT zp5_funcion.
+
+PARAMETERS: p_precio TYPE sflight-price DEFAULT '500.00',
+            p_porc   TYPE i DEFAULT 20.
+
+DATA lv_final TYPE sflight-price.
+
+CALL FUNCTION 'Z_CALCULAR_DESCUENTO'
+  EXPORTING
+    iv_precio           = p_precio
+    iv_porcentaje       = p_porc
+  IMPORTING
+    ev_precio_final     = lv_final
+  EXCEPTIONS
+    porcentaje_invalido = 1
+    OTHERS              = 2.
+
+IF sy-subrc <> 0.
+  MESSAGE 'El porcentaje debe estar entre 0 y 100' TYPE 'E'.
+ENDIF.
+
+WRITE: / 'Precio original:', p_precio,
+       / 'Precio final:   ', lv_final.`),
+          syntax([
+            ["CALL FUNCTION 'NOMBRE'", "Llama al módulo de función. El nombre va entre comillas simples y en mayúsculas. Truco: haz doble clic sobre el nombre en el editor para abrirlo en SE37."],
+            ["EXPORTING", "Lo que el programa <b>envía</b> a la función (son los parámetros de <b>importación</b> de la función: se ve desde el lado contrario)."],
+            ["IMPORTING", "Lo que el programa <b>recibe</b> (los parámetros de <b>exportación</b> de la función)."],
+            ["EXCEPTIONS nombre = 1 OTHERS = 2", "Si la función ejecuta RAISE nombre, el programa no se cae: sy-subrc toma el número indicado. OTHERS captura cualquier otra excepción."],
+            ["RAISE porcentaje_invalido.", "Dentro de la función: termina la función y avisa al llamador con esa excepción."],
+            ["IF sy-subrc <> 0.", "Siempre revisa sy-subrc después de CALL FUNCTION con EXCEPTIONS."],
+            ["Interfase local (*\"...)", "El comentario que SE37 genera al principio del código describe los parámetros. No lo edites a mano: se regenera desde las pestañas."],
+          ]),
+        ],
+        check: () => !!store.data.fmodules?.Z_CALCULAR_DESCUENTO?.activeBody && run("ZP5_FUNCION")?.status === "ok" && activeHas("ZP5_FUNCION", /CALL\s+FUNCTION\s+'Z_CALCULAR_DESCUENTO'/i),
+        hint: "Activa Z_CALCULAR_DESCUENTO en SE37 y ejecuta ZP5_FUNCION.",
+      },
+      {
+        id: "p5s2",
+        title: "BAPIs: funciones estándar de SAP",
+        body: [
+          "Una <b>BAPI</b> (Business API) es un módulo de función estándar que SAP publica para leer o modificar datos de negocio de forma segura (validaciones incluidas). En proyectos reales se usan para crear pedidos, clientes, materiales... En el simulador tienes las BAPIs del modelo de vuelos: <code>BAPI_FLIGHT_GETLIST</code> y <code>BAPI_FLIGHT_GETDETAIL</code>. Mira su interfaz en SE37 antes de empezar.",
+          "Regla de oro: <b>las BAPIs no lanzan excepciones</b>; devuelven los errores en la tabla <code>RETURN</code> (estructura <code>BAPIRET2</code>). Siempre hay que revisarla. Y si la BAPI modifica datos, después hay que llamar a <code>BAPI_TRANSACTION_COMMIT</code> (o ROLLBACK si hubo errores).",
+          "Crea <code>ZP5_BAPI</code>:",
+          code(`REPORT zp5_bapi.
+
+PARAMETERS p_carr TYPE sflight-carrid DEFAULT 'LA'.
+
+DATA: lt_vuelos TYPE STANDARD TABLE OF bapisfldat WITH DEFAULT KEY,
+      lt_return TYPE STANDARD TABLE OF bapiret2 WITH DEFAULT KEY,
+      ls_datos  TYPE bapisfldat,
+      ls_plazas TYPE bapisflava.
+
+CALL FUNCTION 'BAPI_FLIGHT_GETLIST'
+  EXPORTING
+    airline     = p_carr
+    max_rows    = 5
+  TABLES
+    flight_list = lt_vuelos
+    return      = lt_return.
+
+" Revisar RETURN: si hay un mensaje de error (E o A), se muestra y se termina
+LOOP AT lt_return INTO DATA(ls_ret) WHERE type = 'E' OR type = 'A'.
+  MESSAGE ls_ret-message TYPE 'I'.
+  RETURN.
+ENDLOOP.
+
+WRITE: / 'Vuelos de', p_carr COLOR COL_HEADING.
+ULINE.
+LOOP AT lt_vuelos INTO DATA(ls_vuelo).
+  CALL FUNCTION 'BAPI_FLIGHT_GETDETAIL'
+    EXPORTING
+      airlineid    = ls_vuelo-airlineid
+      connectionid = ls_vuelo-connectid
+      flightdate   = ls_vuelo-flightdate
+    IMPORTING
+      flight_data  = ls_datos
+      availibility = ls_plazas
+    TABLES
+      return       = lt_return.
+  WRITE: / ls_vuelo-connectid, ls_vuelo-flightdate, ls_vuelo-cityfrom(12), ls_vuelo-cityto(12),
+           'Libres:', ls_plazas-econofree.
+ENDLOOP.`),
+          syntax([
+            ["TABLES flight_list = lt_vuelos", "Parámetros de tipo tabla. Se pasan por referencia: la BAPI llena directamente tu tabla interna."],
+            ["TYPE STANDARD TABLE OF bapiret2", "BAPIRET2 es la estructura estándar de mensajes de retorno: TYPE (S, E, W, I, A), ID (clase), NUMBER, MESSAGE (texto) y MESSAGE_V1..V4."],
+            ["LOOP AT lt_return ... WHERE type = 'E' OR type = 'A'.", "Busca mensajes de error. Una BAPI que falla no detiene tu programa: si no revisas RETURN, el error pasa desapercibido."],
+            ["RETURN.", "Termina el bloque de proceso actual (aquí, el programa)."],
+            ["IMPORTING flight_data = ls_datos", "Parámetros de exportación de la BAPI: estructuras con los datos leídos."],
+            ["ls_vuelo-cityfrom(12)", "Desplazamiento/longitud: escribe solo los 12 primeros caracteres del campo."],
+          ]),
+          "Prueba con la aerolínea <code>XX</code> (no existe): verás cómo la BAPI devuelve el error en RETURN.",
+        ],
+        check: () => run("ZP5_BAPI")?.status === "ok" && activeHas("ZP5_BAPI", /BAPI_FLIGHT_GETLIST/i) && activeHas("ZP5_BAPI", /lt_return|return/i),
+        hint: "Ejecuta ZP5_BAPI llamando a BAPI_FLIGHT_GETLIST.",
+      },
+      {
+        id: "p5s3",
+        title: "Rendimiento: SELECT en LOOP vs FOR ALL ENTRIES (ST05)",
+        body: [
+          "El error de rendimiento más común en ABAP es hacer un <b>SELECT dentro de un LOOP</b>: si la tabla tiene 10.000 líneas, son 10.000 viajes a la base de datos. La solución es leer todo de una vez con un <b>JOIN</b> o con <b>FOR ALL ENTRIES</b>. La herramienta para descubrirlo es la <b>traza SQL (ST05)</b>.",
+          "Crea <code>ZP5_RENDIMIENTO</code>:",
+          code(`REPORT zp5_rendimiento.
+
+SELECT carrid, connid, cityfrom, cityto FROM spfli
+  INTO TABLE @DATA(lt_conexiones).
+
+" ---- Versión 1 (MAL): un SELECT por cada conexión ----
+DATA lv_total1 TYPE i.
+LOOP AT lt_conexiones INTO DATA(ls_con).
+  SELECT COUNT(*) FROM sflight
+    WHERE carrid = @ls_con-carrid
+      AND connid = @ls_con-connid
+    INTO @DATA(lv_cant).
+  lv_total1 = lv_total1 + lv_cant.
+ENDLOOP.
+WRITE: / 'Versión 1 (SELECT en LOOP):', lv_total1, 'vuelos'.
+
+" ---- Versión 2 (BIEN): un solo SELECT con FOR ALL ENTRIES ----
+DATA lt_vuelos TYPE STANDARD TABLE OF sflight WITH DEFAULT KEY.
+IF lt_conexiones IS NOT INITIAL.
+  SELECT * FROM sflight
+    FOR ALL ENTRIES IN @lt_conexiones
+    WHERE carrid = @lt_conexiones-carrid
+      AND connid = @lt_conexiones-connid
+    INTO TABLE @lt_vuelos.
+ENDIF.
+WRITE: / 'Versión 2 (FOR ALL ENTRIES):', lines( lt_vuelos ), 'vuelos'.`),
+          "Ahora mídelo: 1) Abre <b>ST05</b> y pulsa <b>Activar traza</b>. 2) Ejecuta ZP5_RENDIMIENTO. 3) Vuelve a ST05, <b>Desactivar traza</b> y <b>Visualizar traza</b>. Verás un SELECT a SFLIGHT por cada conexión (versión 1) y uno solo con todas las condiciones (versión 2). El resumen <b>Sentencias idénticas</b> y el aviso de rendimiento te señalan el problema.",
+          syntax([
+            ["FOR ALL ENTRIES IN @itab", "Lee de la base de datos los registros que cumplen la condición para <b>cada línea</b> de la tabla interna, pero en un solo acceso. Elimina duplicados automáticamente."],
+            ["WHERE carrid = @itab-carrid", "En la condición se usan los campos de la tabla interna como valores."],
+            ["IF itab IS NOT INITIAL.", "<b>Obligatorio</b>: si la tabla interna está vacía, FOR ALL ENTRIES ignora el WHERE y lee <b>toda</b> la tabla de la base de datos."],
+            ["SELECT COUNT(*)", "Cuenta registros sin traerlos (más rápido que leerlos y contar)."],
+            ["ST05", "Traza SQL: registra cada sentencia que llega a la base de datos, con su duración y número de registros."],
+          ]),
+          "Otras buenas prácticas de rendimiento: lee solo los campos que necesitas (evita <code>SELECT *</code> en tablas anchas), filtra en el WHERE y no en el LOOP, y usa tablas SORTED o HASHED cuando hagas muchos READ TABLE.",
+        ],
+        check: () => run("ZP5_RENDIMIENTO")?.status === "ok" && activeHas("ZP5_RENDIMIENTO", /FOR\s+ALL\s+ENTRIES/i) && (store.data.st05?.records || []).some((r) => r.program === "ZP5_RENDIMIENTO"),
+        hint: "Activa la traza en ST05, ejecuta ZP5_RENDIMIENTO y visualiza la traza.",
+      },
+      {
+        id: "p5s4",
+        title: "COMMIT WORK y ROLLBACK WORK (LUW)",
+        body: [
+          "Los cambios en la base de datos (INSERT, UPDATE, MODIFY, DELETE) no son definitivos hasta que se confirman. El conjunto de cambios que se confirman o deshacen juntos se llama <b>LUW</b> (unidad lógica de trabajo). <code>COMMIT WORK</code> los confirma; <code>ROLLBACK WORK</code> los deshace todos desde el último COMMIT. Al terminar un programa sin errores, SAP confirma automáticamente.",
+          "Crea <code>ZP5_LUW</code>:",
+          code(`REPORT zp5_luw.
+
+PARAMETERS p_deshac AS CHECKBOX DEFAULT 'X'.
+
+DATA ls_cliente TYPE scustom.
+
+SELECT COUNT(*) FROM scustom INTO @DATA(lv_antes).
+
+ls_cliente-id        = '90000001'.
+ls_cliente-name      = 'Cliente de prueba'.
+ls_cliente-city      = 'LIMA'.
+ls_cliente-country   = 'PE'.
+ls_cliente-custtype  = 'P'.
+INSERT scustom FROM ls_cliente.
+IF sy-subrc <> 0.
+  MESSAGE 'El cliente 90000001 ya existe (desmarca la casilla solo una vez)' TYPE 'I'.
+  RETURN.
+ENDIF.
+
+SELECT COUNT(*) FROM scustom INTO @DATA(lv_durante).
+
+IF p_deshac = abap_true.
+  ROLLBACK WORK.
+  WRITE / 'ROLLBACK WORK: el INSERT se deshizo' COLOR COL_NEGATIVE.
+ELSE.
+  COMMIT WORK.
+  WRITE / 'COMMIT WORK: el INSERT quedó grabado' COLOR COL_POSITIVE.
+ENDIF.
+
+SELECT COUNT(*) FROM scustom INTO @DATA(lv_despues).
+WRITE: / 'Clientes antes:  ', lv_antes,
+       / 'Después del INSERT:', lv_durante,
+       / 'Al final:        ', lv_despues.`),
+          syntax([
+            ["INSERT scustom FROM ls_cliente.", "Inserta una fila. sy-subrc = 4 si ya existe una fila con la misma clave."],
+            ["ROLLBACK WORK.", "Deshace todos los cambios de base de datos pendientes desde el último COMMIT."],
+            ["COMMIT WORK.", "Confirma los cambios pendientes: ya no se pueden deshacer."],
+            ["AS CHECKBOX", "Parámetro de tipo casilla: vale 'X' (abap_true) si está marcada y ' ' si no."],
+            ["abap_true", "Constante con el valor 'X'. Su contraria es abap_false (espacio)."],
+          ]),
+          "Ejecuta primero con la casilla marcada: el número final vuelve al inicial. Luego desmárcala: el cliente queda grabado (compruébalo en SE16 con SCUSTOM). Si ejecutas de nuevo sin marcar, el INSERT falla porque la clave ya existe. Para borrarlo puedes usar <b>Sistema - Restaurar datos estándar</b>.",
+        ],
+        check: () => run("ZP5_LUW")?.status === "ok" && activeHas("ZP5_LUW", /ROLLBACK\s+WORK/i),
+        hint: "Ejecuta ZP5_LUW con ROLLBACK WORK.",
+      },
+      {
+        id: "p5s5",
+        title: "Bloqueos: ENQUEUE, DEQUEUE y SM12",
+        body: [
+          "Si dos usuarios modifican el mismo registro al mismo tiempo, uno sobrescribe los cambios del otro. Para evitarlo, antes de modificar se <b>bloquea</b> el registro (ENQUEUE) y al terminar se <b>desbloquea</b> (DEQUEUE). En SAP real cada tabla tiene su <b>objeto de bloqueo</b> (SE11) que genera las funciones ENQUEUE_EZ... y DEQUEUE_EZ...; aquí usaremos la función genérica <code>ENQUEUE_E_TABLE</code>.",
+          "1. Abre <b>SM12</b> y pulsa <b>Simular bloqueo de otro usuario</b>: tabla <code>SCUSTOM</code>, argumento <code>00000001</code>, usuario <code>COMPANERO</code>.<br>2. Crea y ejecuta <code>ZP5_BLOQUEO</code>:",
+          code(`REPORT zp5_bloqueo.
+
+PARAMETERS p_id TYPE scustom-id DEFAULT '00000001'.
+
+CALL FUNCTION 'ENQUEUE_E_TABLE'
+  EXPORTING
+    tabname        = 'SCUSTOM'
+    varkey         = p_id
+  EXCEPTIONS
+    foreign_lock   = 1
+    system_failure = 2
+    OTHERS         = 3.
+
+IF sy-subrc = 1.
+  MESSAGE |El cliente { p_id } está bloqueado por el usuario { sy-msgv1 }| TYPE 'I'.
+  RETURN.
+ELSEIF sy-subrc <> 0.
+  MESSAGE 'Error al bloquear' TYPE 'E'.
+ENDIF.
+
+UPDATE scustom SET discount = '010' WHERE id = @p_id.
+WRITE: / 'Cliente', p_id, 'actualizado con 10% de descuento'.
+
+CALL FUNCTION 'DEQUEUE_E_TABLE'
+  EXPORTING
+    tabname = 'SCUSTOM'
+    varkey  = p_id.
+WRITE / 'Bloqueo liberado'.`),
+          "3. Verás el mensaje de bloqueo. Ejecuta de nuevo con el cliente <code>00000002</code>: esta vez no hay bloqueo y se actualiza. 4. Vuelve a SM12, selecciona el bloqueo simulado y bórralo; ahora el cliente 00000001 también funciona.",
+          syntax([
+            ["ENQUEUE_E_TABLE", "Pide un bloqueo exclusivo sobre una tabla y clave (varkey). Si otro usuario ya lo tiene, lanza FOREIGN_LOCK."],
+            ["sy-msgv1", "Tras FOREIGN_LOCK contiene el usuario que tiene el bloqueo: úsalo para informar al usuario."],
+            ["UPDATE scustom SET discount = '010' WHERE id = @p_id.", "Modifica campos de las filas que cumplen el WHERE. Sin WHERE modificaría <b>toda</b> la tabla."],
+            ["DEQUEUE_E_TABLE", "Libera el bloqueo. Al terminar el programa también se liberan sus bloqueos."],
+            ["SM12", "Lista los bloqueos activos (usuario, tabla, argumento). Borrar una entrada solo se hace cuando un bloqueo quedó colgado."],
+          ]),
+        ],
+        check: () => run("ZP5_BLOQUEO")?.status === "ok" && activeHas("ZP5_BLOQUEO", /ENQUEUE_E_TABLE/i) && !!store.data.visited?.SM12,
+        hint: "Simula un bloqueo en SM12 y ejecuta ZP5_BLOQUEO.",
+      },
+      {
+        id: "p5s6",
+        title: "Archivos: descargar y cargar (GUI_DOWNLOAD / GUI_UPLOAD)",
+        body: [
+          "Muchos programas reales exportan datos a un archivo para Excel o cargan datos masivos desde un archivo de texto. Las funciones clásicas son <code>GUI_DOWNLOAD</code> (de SAP al PC) y <code>GUI_UPLOAD</code> (del PC a SAP). En el navegador la descarga va a tu carpeta de descargas y la carga te pide elegir el archivo.",
+          "Crea <code>ZP5_ARCHIVOS</code>:",
+          code(`REPORT zp5_archivos.
+
+PARAMETERS: p_down RADIOBUTTON GROUP g1 DEFAULT 'X',
+            p_up   RADIOBUTTON GROUP g1,
+            p_file TYPE string LOWER CASE DEFAULT 'C:\\temp\\aerolineas.txt'.
+
+TYPES: BEGIN OF ty_linea,
+         carrid   TYPE scarr-carrid,
+         carrname TYPE scarr-carrname,
+         currcode TYPE scarr-currcode,
+       END OF ty_linea.
+DATA lt_datos TYPE STANDARD TABLE OF ty_linea WITH DEFAULT KEY.
+
+IF p_down = abap_true.
+  SELECT carrid, carrname, currcode FROM scarr INTO TABLE @lt_datos.
+  CALL FUNCTION 'GUI_DOWNLOAD'
+    EXPORTING
+      filename              = p_file
+      write_field_separator = 'X'
+    TABLES
+      data_tab              = lt_datos
+    EXCEPTIONS
+      OTHERS                = 1.
+  WRITE: / lines( lt_datos ), 'líneas descargadas a', p_file.
+ELSE.
+  CALL FUNCTION 'GUI_UPLOAD'
+    EXPORTING
+      filename            = p_file
+      has_field_separator = 'X'
+    TABLES
+      data_tab            = lt_datos
+    EXCEPTIONS
+      file_open_error     = 1
+      OTHERS              = 2.
+  IF sy-subrc <> 0.
+    MESSAGE 'No se pudo leer el archivo' TYPE 'I'.
+    RETURN.
+  ENDIF.
+  LOOP AT lt_datos INTO DATA(ls_linea).
+    WRITE: / ls_linea-carrid, ls_linea-carrname, ls_linea-currcode.
+  ENDLOOP.
+ENDIF.`),
+          "Ejecuta primero con <b>Descargar</b>: obtendrás <code>aerolineas.txt</code> (columnas separadas por tabulador, se abre bien en Excel). Edítalo si quieres y ejecuta con <b>Cargar</b> eligiendo ese archivo.",
+          syntax([
+            ["RADIOBUTTON GROUP g1", "Botones de opción: solo uno del grupo puede estar marcado."],
+            ["LOWER CASE", "Respeta mayúsculas y minúsculas en el parámetro (por defecto se convierte a mayúsculas)."],
+            ["write_field_separator = 'X'", "Separa las columnas con tabulador (formato que Excel entiende)."],
+            ["has_field_separator = 'X'", "Al cargar, cada línea se divide por el separador y se reparte en los campos de la estructura, en orden."],
+            ["data_tab = lt_datos", "La tabla interna que se escribe o que se llena con el contenido del archivo."],
+          ]),
+          "En sistemas modernos se usa la clase <code>cl_gui_frontend_services</code> (métodos gui_download y gui_upload), que hace lo mismo. Ten en cuenta que en un <b>job de fondo</b> (SM36) no hay PC: ahí se usa <code>OPEN DATASET</code> para leer y escribir archivos del servidor.",
+        ],
+        check: () => run("ZP5_ARCHIVOS")?.status === "ok" && activeHas("ZP5_ARCHIVOS", /GUI_DOWNLOAD/i),
+        hint: "Ejecuta ZP5_ARCHIVOS descargando el archivo.",
+      },
+      {
+        id: "p5s7",
+        title: "Mensajes reutilizables (SE91) y variantes",
+        body: [
+          "Escribir los textos de los mensajes dentro del código impide traducirlos y reutilizarlos. En SAP se definen en una <b>clase de mensajes</b> (SE91) con número, y en el código se hace referencia al número.",
+          "1. Abre <b>SE91</b>, crea la clase <code>ZVUELOS</code> (Mensajes de vuelos) y añade:<br><code>001</code> La aerolínea &amp;1 no existe<br><code>002</code> Se encontraron &amp;1 vuelos de &amp;2<br>(Opcional: escribe la traducción en la columna EN.) Graba.",
+          "2. Crea <code>ZP5_MENSAJES</code>:",
+          code(`REPORT zp5_mensajes MESSAGE-ID zvuelos.
+
+PARAMETERS p_carr TYPE scarr-carrid DEFAULT 'LA'.
+
+AT SELECTION-SCREEN.
+  SELECT SINGLE carrid FROM scarr WHERE carrid = @p_carr INTO @DATA(lv_carr).
+  IF sy-subrc <> 0.
+    MESSAGE e001 WITH p_carr.
+  ENDIF.
+
+START-OF-SELECTION.
+  SELECT COUNT(*) FROM sflight WHERE carrid = @p_carr INTO @DATA(lv_n).
+  MESSAGE s002 WITH lv_n p_carr.
+  WRITE: / 'Vuelos de', p_carr, ':', lv_n.`),
+          syntax([
+            ["REPORT ... MESSAGE-ID zvuelos.", "Clase de mensajes por defecto del programa: permite escribir solo el tipo y el número."],
+            ["MESSAGE e001 WITH p_carr.", "e = tipo error, 001 = número. WITH reemplaza &amp;1, &amp;2... del texto por los valores indicados."],
+            ["MESSAGE e001(zvuelos)", "Forma con la clase explícita, cuando no hay MESSAGE-ID o es otra clase."],
+            ["AT SELECTION-SCREEN.", "Validación de la pantalla de selección: un mensaje E aquí vuelve a la pantalla para corregir el valor."],
+          ]),
+          "3. Ejecuta con <code>XX</code> (error en la pantalla) y con <code>LA</code>. 4. <b>Variantes</b>: en la pantalla de selección escribe <code>IB</code> y pulsa <b>Guardar como variante</b> (nombre <code>IBERIA</code>). La próxima vez usa <b>Obtener variante</b> para cargar los valores. Las variantes se usan mucho para programar ejecuciones en fondo con valores fijos.",
+          "Cambia el idioma de inicio de sesión a EN (Sistema - Configuración de usuario) y vuelve a ejecutar: si escribiste la traducción, el mensaje sale en inglés sin tocar el código.",
+        ],
+        check: () => run("ZP5_MENSAJES")?.status === "ok" && activeHas("ZP5_MENSAJES", /MESSAGE-ID\s+zvuelos/i) && !!store.data.msgClasses?.ZVUELOS,
+        hint: "Crea la clase ZVUELOS en SE91 y ejecuta ZP5_MENSAJES.",
+      },
+    ],
+  },
 ];
 
 // ---- "Hazlo tú": ejercicios sin código para copiar al final de cada paso ----
@@ -1408,6 +1758,7 @@ const HAZLO_TU = {
   p2: ["h201"],
   p3: ["h301", "h302"],
   p4: ["h401"],
+  p5: ["h501", "h502"],
 };
 for (const [gid, ids] of Object.entries(HAZLO_TU)) {
   const g = GUIDES.find((x) => x.id === gid);

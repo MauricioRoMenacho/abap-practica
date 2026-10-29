@@ -10,7 +10,7 @@ const TX = [
 ];
 
 // transacciones adicionales (árbol y accesos rápidos)
-export const MORE_TX = [["SE37", "Módulos de función"], ["SE91", "Clases de mensajes"]];
+export const MORE_TX = [["SE37", "Módulos de función"], ["SE91", "Clases de mensajes"], ["ST05", "Traza SQL"], ["SM12", "Bloqueos"]];
 
 export function homeScreen(app) {
   return {

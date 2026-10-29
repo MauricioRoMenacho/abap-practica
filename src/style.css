@@ -2554,3 +2554,12 @@ body.guide-window {
 .fm-body td.center { text-align: center; }
 .fm-test .grid-table input.sap-input { width: 100%; box-sizing: border-box; }
 .file-dlg input[type="file"] { margin: 8px 0; }
+
+/* ST05 / SM12 */
+.trace-state { margin: 10px 0; padding: 8px 10px; border-radius: 4px; font-weight: 600; }
+.trace-state.on { background: #e5f4e8; color: #1e6b33; border: 1px solid #9fd1ab; }
+.trace-state.off { background: #f3f3f3; color: #555; border: 1px solid #ddd; }
+.trace-warn { margin: 8px 0; padding: 8px 10px; background: #fff4e0; border: 1px solid #f0c27a; border-radius: 4px; }
+.grid-table.trace td.sql { white-space: pre-wrap; word-break: break-all; font-size: 12px; max-width: 640px; }
+.grid-table.trace tr.dup td { background: #fff4e0; }
+.grid-table.trace tr.slow td { color: #b00020; }

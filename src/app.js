@@ -92,6 +92,8 @@ export class App {
             ["SE84 - Sistema info repositorio", () => this.command("/nSE84")],
             ["SE37 - Módulos de función", () => this.command("/nSE37")],
             ["SE91 - Clases de mensajes", () => this.command("/nSE91")],
+            ["ST05 - Traza SQL", () => this.command("/nST05")],
+            ["SM12 - Entradas de bloqueo", () => this.command("/nSM12")],
             ["ZJUEGOS - Retos y juegos", () => this.command("/nZJUEGOS")],
             "-",
             ["Menú SAP Easy Access", () => this.home()],

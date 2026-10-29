@@ -863,6 +863,76 @@ START-OF-SELECTION.
   WRITE / |Suma: { lo_calc->sumar( iv_a = 10 iv_b = 5 ) }|.
   WRITE / |Producto: { lo_calc->multiplicar( iv_a = 10 iv_b = 5 ) }|.`,
   },
+  {
+    id: "h501",
+    type: "code",
+    guide: "p5",
+    level: "Intermedio",
+    title: "Hazlo tú: llamar a una BAPI",
+    text: "Llama a la BAPI <code>BAPI_FLIGHT_GETLIST</code> para leer los vuelos de la aerolínea <code>IB</code>. Escribe <code>Vuelos: N</code> (cantidad de líneas de FLIGHT_LIST) y en otra línea el tipo y el texto del primer mensaje de RETURN, por ejemplo <code>S Se encontraron 6 vuelo(s)</code>.",
+    starter: `REPORT zjuego.
+
+DATA lt_vuelos TYPE STANDARD TABLE OF bapisfldat WITH DEFAULT KEY.
+DATA lt_return TYPE STANDARD TABLE OF bapiret2 WITH DEFAULT KEY.
+
+`,
+    expected: (engine) => {
+      const n = sql(engine, `SELECT COUNT(*) AS c FROM "sflight" WHERE "carrid" = 'IB '`)[0].c;
+      return [`Vuelos: ${n}`, `S Se encontraron ${n} vuelo(s)`];
+    },
+    mustContain: [["CALL\\s+FUNCTION\\s+'BAPI_FLIGHT_GETLIST'", "Usa CALL FUNCTION 'BAPI_FLIGHT_GETLIST'."], ["TABLES", "Las tablas de la BAPI se pasan con TABLES."]],
+    hint: "CALL FUNCTION 'BAPI_FLIGHT_GETLIST' EXPORTING airline = 'IB' TABLES flight_list = lt_vuelos return = lt_return. Luego READ TABLE lt_return INTO DATA(ls_ret) INDEX 1.",
+    solution: `REPORT zjuego.
+
+DATA lt_vuelos TYPE STANDARD TABLE OF bapisfldat WITH DEFAULT KEY.
+DATA lt_return TYPE STANDARD TABLE OF bapiret2 WITH DEFAULT KEY.
+
+CALL FUNCTION 'BAPI_FLIGHT_GETLIST'
+  EXPORTING
+    airline     = 'IB'
+  TABLES
+    flight_list = lt_vuelos
+    return      = lt_return.
+
+WRITE / |Vuelos: { lines( lt_vuelos ) }|.
+READ TABLE lt_return INTO DATA(ls_ret) INDEX 1.
+WRITE / |{ ls_ret-type } { ls_ret-message }|.`,
+  },
+  {
+    id: "h502",
+    type: "code",
+    guide: "p5",
+    level: "Intermedio",
+    title: "Hazlo tú: FOR ALL ENTRIES",
+    text: "Lee de <code>SPFLI</code> las conexiones que salen de <code>LIMA</code> (campo CITYFROM). Después, <b>con un solo SELECT</b> usando <code>FOR ALL ENTRIES</code>, lee de <code>SFLIGHT</code> todos los vuelos de esas conexiones. Escribe <code>Conexiones: X</code> y <code>Vuelos: Y</code>. Recuerda comprobar que la primera tabla no esté vacía antes del FOR ALL ENTRIES.",
+    starter: `REPORT zjuego.
+
+`,
+    expected: (engine) => {
+      const c = sql(engine, `SELECT COUNT(*) AS c FROM "spfli" WHERE "cityfrom" = 'LIMA'`)[0].c;
+      const v = sql(engine, `SELECT COUNT(*) AS c FROM "sflight" f JOIN "spfli" p ON p."carrid" = f."carrid" AND p."connid" = f."connid" WHERE p."cityfrom" = 'LIMA'`)[0].c;
+      return [`Conexiones: ${c}`, `Vuelos: ${v}`];
+    },
+    mustContain: [["FOR\\s+ALL\\s+ENTRIES\\s+IN", "Usa FOR ALL ENTRIES IN para la segunda lectura."], ["IS\\s+NOT\\s+INITIAL", "Comprueba que la tabla de conexiones no esté vacía (IF ... IS NOT INITIAL)."]],
+    hint: "SELECT carrid, connid FROM spfli WHERE cityfrom = 'LIMA' INTO TABLE @DATA(lt_con). IF lt_con IS NOT INITIAL. SELECT ... FROM sflight FOR ALL ENTRIES IN @lt_con WHERE carrid = @lt_con-carrid AND connid = @lt_con-connid INTO TABLE @DATA(lt_vuelos). ENDIF.",
+    solution: `REPORT zjuego.
+
+SELECT carrid, connid FROM spfli
+  WHERE cityfrom = 'LIMA'
+  INTO TABLE @DATA(lt_con).
+
+DATA lt_vuelos TYPE STANDARD TABLE OF sflight WITH DEFAULT KEY.
+IF lt_con IS NOT INITIAL.
+  SELECT * FROM sflight
+    FOR ALL ENTRIES IN @lt_con
+    WHERE carrid = @lt_con-carrid
+      AND connid = @lt_con-connid
+    INTO TABLE @lt_vuelos.
+ENDIF.
+
+WRITE / |Conexiones: { lines( lt_con ) }|.
+WRITE / |Vuelos: { lines( lt_vuelos ) }|.`,
+  },
 );
 
 // ---------------------------------------------------------------- utilidades
