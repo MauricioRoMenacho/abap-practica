@@ -20,6 +20,9 @@ const KEY_LABELS = {
   F2: "F2",
 };
 
+// en SAP GUI estas funciones son solo un icono (el texto aparece al pasar el ratón)
+const ICON_ONLY = new Set(["change", "display", "check", "activate", "exec", "save", "delete", "refresh", "print", "download"]);
+
 function keyName(e) {
   let k = e.key;
   if (k.length === 1) k = k.toUpperCase();
@@ -240,13 +243,13 @@ export class App {
           : h(
               "button",
               {
-                class: "app-btn" + (it.primary ? " primary" : ""),
+                class: "app-btn" + (it.primary ? " primary" : "") + (it.icon && ICON_ONLY.has(it.icon) && !it.text ? " icon-only" : it.icon ? "" : " text-btn"),
                 title: (it.tip || it.label || "") + (it.key ? ` (${KEY_LABELS[it.key] || it.key})` : ""),
                 disabled: it.disabled,
                 onclick: () => it.action(),
               },
               it.icon ? h("span", { class: "ico ico-" + it.icon }) : null,
-              it.label ? h("span", {}, it.label) : null,
+              it.label && !(it.icon && ICON_ONLY.has(it.icon) && !it.text) ? h("span", {}, it.label) : null,
             ),
       ),
     );

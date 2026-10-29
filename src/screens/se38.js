@@ -510,7 +510,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       "-",
       { icon: "pretty", label: "Pretty Printer", key: "Shift+F1", action: pretty, disabled: mode !== "change" },
       { icon: "search", label: "ATC", tip: "ABAP Test Cockpit: revisión de calidad del código", action: runAtc },
-      { icon: "check", label: "Prueba unitaria", tip: "Ejecutar las pruebas ABAP Unit (Ctrl+Shift+F10)", key: "Ctrl+Shift+F10", action: runUnit },
+      { icon: "unit", label: "Prueba unitaria", tip: "Ejecutar las pruebas ABAP Unit (Ctrl+Shift+F10)", key: "Ctrl+Shift+F10", action: runUnit },
       { icon: "text", label: "Elementos de texto", action: () => { const target = isInc() ? store.mainProgramsOf(n)[0] : n; if (!target) return app.status("Los elementos de texto pertenecen al programa principal: incluya primero este include en un programa", "W"); app.push(textElementsScreen(app, target, mode)); } },
     ],
     keys: { "Ctrl+S": () => saveBusy() },
