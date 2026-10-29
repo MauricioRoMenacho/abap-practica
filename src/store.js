@@ -14,6 +14,19 @@ function load() {
   return null;
 }
 
+// sincronización entre ventanas (por ejemplo, la guía abierta en otra ventana)
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key !== KEY || !e.newValue) return;
+    try {
+      store.data = JSON.parse(e.newValue);
+      for (const l of listeners) l();
+    } catch {
+      /* ignorar */
+    }
+  });
+}
+
 export const store = {
   data: load() || {
     programs: {},

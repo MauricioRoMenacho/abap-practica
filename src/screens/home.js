@@ -6,6 +6,7 @@ const TX = [
   ["SE11", "Diccionario ABAP", "Crear tablas transparentes con sus campos", "ddic"],
   ["SE16", "Browser de datos", "Ver, buscar e insertar registros en las tablas", "table"],
   ["SE84", "Sistema info repositorio", "Buscar programas y tablas por nombre", "search"],
+  ["ZJUEGOS", "Retos y juegos", "Completa código, adivina la salida, corrige errores y gana puntos", "game"],
 ];
 
 export function homeScreen(app) {

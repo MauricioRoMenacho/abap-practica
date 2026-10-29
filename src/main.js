@@ -11,8 +11,28 @@ import { se38Screen } from "./screens/se38.js";
 import { se11Screen } from "./screens/se11.js";
 import { se16Screen } from "./screens/se16.js";
 import { se84Screen } from "./screens/se84.js";
+import { gamesScreen } from "./screens/games.js";
+
+// guía de práctica sola, en pantalla completa (se abre en otra ventana)
+async function bootGuideWindow() {
+  const root = document.getElementById("app");
+  document.body.classList.add("guide-window");
+  document.title = "Guía de práctica · Práctica ABAP";
+  const host = document.createElement("div");
+  host.className = "guide-page-host";
+  root.replaceChildren();
+  const top = document.createElement("div");
+  top.className = "guide-page-top";
+  top.innerHTML = '<span class="brand-logo">ABAP</span><span class="gp-title">Guía de práctica</span><span class="gp-note">Los ejercicios se marcan solos mientras trabajas en la ventana del sistema.</span>';
+  const page = document.createElement("div");
+  page.className = "guide-page";
+  page.append(top, host);
+  root.append(page);
+  guidePanel({ engine: null, standalone: true, toggleGuide: () => window.close() }, host);
+}
 
 async function boot() {
+  if (new URLSearchParams(location.search).has("guia")) return bootGuideWindow();
   const root = document.getElementById("app");
   const [{ Engine }, { SQLiteDatabaseClient }, { libFiles }] = await Promise.all([import("./engine/engine.js"), import("@abaplint/database-sqlite"), import("./engine/lib.js")]);
   const wasmUrl = new URL("sql-wasm.wasm", document.baseURI).href;
@@ -33,6 +53,7 @@ async function boot() {
     SE16N: (app) => se16Screen(app),
     SE84: (app) => se84Screen(app),
     SE80: (app) => se84Screen(app),
+    ZJUEGOS: (app) => gamesScreen(app),
   };
   const app = new App(root, { transactions, guide: guidePanel });
   app.engine = engine;

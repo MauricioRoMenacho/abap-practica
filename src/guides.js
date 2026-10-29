@@ -1411,23 +1411,36 @@ export function guidePanel(app, host) {
     else localStorage.removeItem(stepKey());
   };
   let savedScroll = Number(localStorage.getItem("abapp.guideScroll." + current)) || 0;
+  const standalone = !!app.standalone;
   const done = () => {
+    // en la ventana aparte no hay motor: se usa el resultado que guarda la ventana principal
+    if (!app.engine) {
+      const saved = store.data.guideDone || {};
+      const out = {};
+      for (const g of GUIDES) for (const s of g.steps) out[s.id] = !!store.data.manual[s.id] || !!saved[s.id];
+      return out;
+    }
     const out = {};
     for (const g of GUIDES)
       for (const s of g.steps) {
         try {
-          out[s.id] = !!store.data.manual[s.id] || !!(app.engine && s.check(app));
+          out[s.id] = !!store.data.manual[s.id] || !!s.check(app);
         } catch {
           out[s.id] = false;
         }
       }
+    const prev = JSON.stringify(store.data.guideDone || {});
+    if (prev !== JSON.stringify(out)) {
+      store.data.guideDone = out;
+      setTimeout(() => store.save(), 0);
+    }
     return out;
   };
   let lastDone = null;
 
   const render = () => {
     const d = done();
-    if (lastDone && app.engine) {
+    if (lastDone && (app.engine || app.standalone)) {
       for (const [k, v] of Object.entries(d)) {
         if (v && !lastDone[k]) {
           const step = GUIDES.flatMap((g) => g.steps).find((s) => s.id === k);
@@ -1436,7 +1449,7 @@ export function guidePanel(app, host) {
         }
       }
     }
-    lastDone = app.engine ? d : null;
+    lastDone = app.engine || app.standalone ? d : null;
     const g = GUIDES.find((x) => x.id === current);
     const total = g.steps.length;
     const n = g.steps.filter((s) => d[s.id]).length;
@@ -1476,7 +1489,26 @@ export function guidePanel(app, host) {
               );
             }),
           ),
-          h("button", { class: "guide-close", title: "Ocultar guía", onclick: () => app.toggleGuide(false) }, h("span", { class: "ico ico-close" })),
+          h(
+            "div",
+            { class: "guide-actions" },
+            standalone
+              ? null
+              : h(
+                  "button",
+                  {
+                    class: "guide-close",
+                    title: "Abrir la guía en pantalla completa (otra ventana)",
+                    onclick: () => {
+                      const url = location.pathname + "?guia=1";
+                      const w = window.open(url, "abap-guia", "width=1100,height=860");
+                      if (!w) location.href = url;
+                    },
+                  },
+                  h("span", { class: "ico ico-expand" }),
+                ),
+            standalone ? null : h("button", { class: "guide-close", title: "Ocultar guía", onclick: () => app.toggleGuide(false) }, h("span", { class: "ico ico-close" })),
+          ),
         ),
         h("div", { class: "guide-sub" }, g.subtitle),
         h("div", { class: "progress" }, h("div", { class: "progress-bar", style: { width: (n / total) * 100 + "%" } })),

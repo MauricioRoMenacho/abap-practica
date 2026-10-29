@@ -26,6 +26,9 @@ campo de comandos, transacciones, F3/F8, barra de estado… sin paquetes ni órd
   - Paso 3: tablas internas, depurador, tablas estándar y JOINs
   - Paso 4: programación orientada a objetos
 
+- **Guía en pantalla completa**: botón para abrirla en otra ventana; se sincroniza sola con el sistema.
+- **Retos y juegos (ZJUEGOS)**: 32 retos con puntos y niveles: completar el código, adivinar la salida, encontrar el error y programar desde cero (se corrige ejecutando el programa y comparando la salida).
+
 ## Desarrollo local
 
 ```bash
