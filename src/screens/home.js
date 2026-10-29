@@ -58,7 +58,7 @@ export function homeScreen(app) {
               h("div", {}, h("h2", {}, "¿Primera vez?"), h("p", {}, "Abre la ", h("b", {}, "Guía de práctica"), " (botón arriba a la derecha) y sigue el Paso 1. Cada ejercicio se marca solo cuando lo completas.")),
               h("button", { class: "btn btn-primary", onclick: () => app.toggleGuide(true) }, "Abrir la guía"),
             ),
-            h("p", { class: "muted small" }, `Tus objetos: ${progs} programa(s), ${tabs} tabla(s). Tablas de ejemplo disponibles: SCARR, SPFLI, SFLIGHT.`),
+            h("p", { class: "muted small" }, `Tus objetos: ${progs} programa(s), ${tabs} tabla(s). Tablas estándar de ejemplo: vuelos (SCARR, SFLIGHT, SBOOK...), finanzas (T001), ventas (KNA1, VBAK, VBAP), compras (LFA1, EKKO, EKPO), materiales (MARA, MAKT) y personal (PA0001, PA0002, PA0008).`),
           ),
         ),
       );

@@ -4,6 +4,7 @@ import { store } from "../store.js";
 import { findTable } from "./se11.js";
 import { formatCell } from "./alv.js";
 import { DDIC_TYPES } from "../engine/ddic.js";
+import { STANDARD_TABLES } from "../engine/standard.js";
 
 const KIND = { CHAR: "C", CLNT: "C", CUKY: "C", UNIT: "C", LANG: "C", STRING: "C", NUMC: "N", INT1: "I", INT2: "I", INT4: "I", DEC: "P", CURR: "P", QUAN: "P", DATS: "D", TIMS: "T", FLTP: "F" };
 
@@ -103,13 +104,21 @@ export function se16Screen(app) {
     onEnter: go,
     render(el) {
       nameInput = input({ maxlength: 16, value: store.data.lastTable || "", class: "sap-input upper w-20", autofocus: true, oninput: (e) => (e.target.value = e.target.value.toUpperCase()) });
-      const all = [...["SCARR", "SPFLI", "SFLIGHT"], ...store.tables().filter((t) => t.active).map((t) => t.name)];
+      const groups = {};
+      for (const t of Object.values(STANDARD_TABLES)) (groups[t.area || "Otros"] ||= []).push(t);
+      const mine = store.tables().filter((t) => t.active);
+      const chip = (t) => h("button", { class: "chip", title: t.description, onclick: () => { nameInput.value = t.name; go(); } }, t.name);
       el.append(
         h(
           "div",
           { class: "panel narrow" },
           field("Nombre de tabla", nameInput, { required: true }),
-          h("div", { class: "chips" }, h("span", { class: "muted small" }, "Acceso rápido: "), all.map((n) => h("button", { class: "chip", onclick: () => { nameInput.value = n; go(); } }, n))),
+          h(
+            "div",
+            { class: "table-groups" },
+            mine.length ? h("div", { class: "tg-row" }, h("span", { class: "tg-label" }, "Mis tablas"), h("div", { class: "chips" }, mine.map(chip))) : null,
+            Object.entries(groups).map(([area, list]) => h("div", { class: "tg-row" }, h("span", { class: "tg-label" }, area), h("div", { class: "chips" }, list.map(chip)))),
+          ),
         ),
       );
     },
@@ -208,7 +217,7 @@ export function se16DataScreen(app, n, q = {}) {
   };
   const keyOf = (r) => fields.filter((f) => f.key).map((f) => r[f.name.toLowerCase()]);
   const render = () => {
-    headEl.replaceChildren(h("span", { class: "eh-label" }, "Tabla:"), h("b", {}, n), h("span", { class: "eh-label" }, "Entradas visualizadas:"), h("b", {}, rows.length), isStd ? h("span", { class: "muted small" }, "(tabla estándar: los cambios se pueden revertir en Sistema → Restaurar datos de vuelos)") : null);
+    headEl.replaceChildren(h("span", { class: "eh-label" }, "Tabla:"), h("b", {}, n), h("span", { class: "eh-label" }, "Entradas visualizadas:"), h("b", {}, rows.length), isStd ? h("span", { class: "muted small" }, "(tabla estándar: los cambios se pueden revertir en Sistema → Restaurar datos de las tablas estándar)") : null);
     const table = h(
       "table",
       { class: "alv striped optimize" },

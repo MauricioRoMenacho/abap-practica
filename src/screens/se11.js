@@ -114,7 +114,7 @@ export function se11Screen(app) {
             h("button", { class: "btn", onclick: () => open("change"), title: "F6" }, h("span", { class: "ico ico-change" }), "Modificar"),
             h("button", { class: "btn btn-primary", onclick: create, title: "F5" }, h("span", { class: "ico ico-create" }), "Crear"),
           ),
-          h("p", { class: "hint" }, "Tablas de ejemplo para practicar: SCARR (aerolíneas), SPFLI (conexiones), SFLIGHT (vuelos)."),
+          h("p", { class: "hint" }, "Tablas estándar para practicar (pulsa F4 para verlas todas): vuelos SCARR, SPFLI, SFLIGHT, SBOOK, SCUSTOM; finanzas T001, T005, TCURC; ventas KNA1, VBAK, VBAP; compras LFA1, EKKO, EKPO; materiales MARA, MAKT; personal PA0001, PA0002, PA0008."),
         ),
       );
     },

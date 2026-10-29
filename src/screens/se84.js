@@ -51,7 +51,7 @@ export function se84Screen(app) {
           field("Tipo de objeto", typeSel),
           field("Nombre", nameInput),
           field("Descripción breve", descInput),
-          h("label", { class: "radio" }, stdCheck, "Incluir tablas estándar (SCARR, SPFLI, SFLIGHT)"),
+          h("label", { class: "radio" }, stdCheck, "Incluir tablas estándar (vuelos, FI, SD, MM, HR)"),
           h("p", { class: "hint" }, "Usa * como comodín. Ejemplos: Z*, ZP1*, *ALV*."),
         ),
       );

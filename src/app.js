@@ -98,7 +98,7 @@ export class App {
             "-",
             ["Exportar mis datos (respaldo)", () => this.exportData()],
             ["Importar datos...", () => this.importData()],
-            ["Restaurar datos de vuelos (SFLIGHT...)", () => this.resetFlights()],
+            ["Restaurar datos de las tablas estándar", () => this.resetFlights()],
             ["Borrar todo y empezar de cero", () => this.resetAll()],
           ]),
           menu("Ayuda", [
@@ -406,9 +406,9 @@ export class App {
   }
 
   async resetFlights() {
-    if (!(await confirm("¿Restaurar los datos originales de SCARR, SPFLI y SFLIGHT? Tus tablas Z no se tocan."))) return;
+    if (!(await confirm("¿Restaurar los datos originales de todas las tablas estándar (vuelos, FI, SD, MM, HR)? Tus tablas Z no se tocan."))) return;
     await this.engine.resetStandardData();
-    this.status("Datos de vuelos restaurados", "S");
+    this.status("Datos de las tablas estándar restaurados", "S");
   }
 
   async resetAll() {
@@ -445,7 +445,7 @@ export class App {
         "div",
         { class: "dlg-text" },
         h("p", {}, "El código ABAP se ejecuta en tu navegador gracias al transpilador open source de abaplint (ABAP → JavaScript). Soporta la gran mayoría del ABAP moderno y clásico:"),
-        h("ul", {}, h("li", {}, "DATA, TYPES, tablas internas, LOOP, READ TABLE, SORT, expresiones en línea, string templates"), h("li", {}, "Clases locales, interfaces, excepciones TRY/CATCH, FORM/PERFORM"), h("li", {}, "Open SQL: SELECT, INSERT, UPDATE, MODIFY, DELETE sobre tus tablas Z y las de vuelos"), h("li", {}, "Pantalla de selección: PARAMETERS, SELECT-OPTIONS, bloques, checkbox, radiobuttons"), h("li", {}, "Eventos: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION"), h("li", {}, "ALV con CL_SALV_TABLE (funciones, columnas, orden, totales, cebra, título)")),
+        h("ul", {}, h("li", {}, "DATA, TYPES, tablas internas, LOOP, READ TABLE, SORT, expresiones en línea, string templates"), h("li", {}, "Clases locales, interfaces, excepciones TRY/CATCH, FORM/PERFORM"), h("li", {}, "Open SQL: SELECT (con JOIN, GROUP BY, SUM...), INSERT, UPDATE, MODIFY, DELETE sobre tus tablas Z y las estándar"), h("li", {}, "Pantalla de selección: PARAMETERS, SELECT-OPTIONS, bloques, checkbox, radiobuttons"), h("li", {}, "Eventos: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION"), h("li", {}, "ALV con CL_SALV_TABLE (funciones, columnas, orden, totales, cebra, título)")),
         h("p", {}, "No disponible por ahora: dynpros (CALL SCREEN), Smartforms/Adobe Forms, funciones RFC/BAPI reales, paquetes y órdenes de transporte."),
         h("p", { class: "hint" }, "Todo se guarda en tu navegador (localStorage). Usa Sistema → Exportar para hacer un respaldo."),
       ),
