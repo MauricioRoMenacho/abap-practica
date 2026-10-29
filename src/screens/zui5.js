@@ -254,7 +254,7 @@ export function ideScreen(app, name) {
       return;
     }
     // filtrar avisos internos de UI5 que no aportan
-    if (/Component-preload\.js|Device API logging|sap\.ui\.thirdparty|DEPRECATED|deprecated|sync XMLHttpRequest|was not found in|-preload|ResourceBundle.*not found|could not find any translatable text/i.test(t)) return;
+    if (/Component-preload\.js|Device API logging|sap\.ui\.thirdparty|DEPRECATED|deprecated|sync XMLHttpRequest|was not found in|-preload|ResourceBundle.*not found|could not find any translatable text|LrepConnector|Service 'Navigation' could not be obtained|Service 'CrossApplicationNavigation'|sap\.ushell|ShellNavigation/i.test(t)) return;
     log(ev.data.type === "error" ? "error" : "warn", t);
   };
   window.addEventListener("message", onMessage);

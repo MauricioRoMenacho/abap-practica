@@ -290,7 +290,7 @@ export function createProject(template, name, title, engine) {
     const files = {
       "package.json": json({ name, version: "0.0.1", private: true, description: title, scripts: { start: "fiori run --open \"test/flpSandbox.html\"", build: "ui5 build --config=ui5.yaml --clean-dest --dest dist", deploy: "fiori deploy" }, devDependencies: { "@ui5/cli": "^4", "@sap/ux-ui5-tooling": "1" } }),
       "webapp/index.html": indexHtml(name, title, `module:${pathOf(name)}/initMockServer`).replace('data-sap-ui-frame-options="trusted"', `data-sap-ui-frame-options="trusted"
-        data-sap-ui-flex-connectors='[{"connector":"LocalStorageConnector"}]'`),
+        data-sap-ui-flexibility-services='[{"connector":"LocalStorageConnector"}]'`),
       "webapp/manifest.json": feManifest(name, title),
       "webapp/Component.js": feComponentJs(name),
       "webapp/annotations/annotation.xml": annotationsXml(),

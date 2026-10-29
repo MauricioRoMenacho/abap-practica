@@ -1074,4 +1074,242 @@ nombre=Name`, "webapp/i18n/i18n_en.properties"),
       },
     ],
   },
+  {
+    id: "u8",
+    title: "UI5 Paso 8",
+    subtitle: "Smart controls y SAP Fiori elements (anotaciones)",
+    steps: [
+      {
+        id: "u8s1",
+        title: "Anotaciones: describir la pantalla con metadatos",
+        body: [
+          "Hasta ahora escribiste cada columna y cada campo en la vista XML. Con las <b>anotaciones</b> el servicio OData describe <b>cómo</b> mostrar sus datos (qué columnas, qué filtros, qué título) y los <b>smart controls</b> y <b>SAP Fiori elements</b> construyen la pantalla solos. Este tema pesa entre el 11 % y el 20 % del examen C_FIORD.",
+          "Crea en ZUI5 un proyecto con la plantilla <b>Aplicación con servicio OData V2 (vuelos)</b>, nombre <code>zsmart</code>, título <code>Vuelos smart</code>, y abre <code>webapp/annotations/annotation.xml</code>:",
+          terms([
+            ["Vocabulario UI (com.sap.vocabularies.UI.v1)", "Conjunto de términos estándar para describir la interfaz. Otros vocabularios: Common (textos, listas de valores), Communication, Analytics..."],
+            ["Annotations Target=\"ZFLIGHT_SRV.Flight\"", "A qué entidad (o propiedad) se aplican las anotaciones."],
+            ["UI.LineItem", "Columnas de una tabla: una lista de UI.DataField con la propiedad (Path) y una etiqueta opcional (Label)."],
+            ["UI.SelectionFields", "Campos que aparecen como filtros en la barra de filtros."],
+            ["UI.HeaderInfo", "Nombre del tipo (singular y plural), título y descripción de la cabecera de un objeto."],
+            ["UI.FieldGroup#Calificador", "Grupo de campos (un formulario). El calificador (#Ruta) permite tener varios."],
+            ["UI.Facets / UI.ReferenceFacet", "Secciones de una página de objeto: apuntan a un FieldGroup o a un LineItem de una entidad relacionada (ToFlights/@UI.LineItem)."],
+            ["manifest.json - dataSources.annotation", "El archivo de anotaciones locales se declara como ODataAnnotation y se enlaza al servicio con settings.annotations."],
+            ["Origen de las anotaciones", "En sistemas reales vienen del back-end: CDS con @UI.lineItem, @UI.selectionField (RAP / SADL) o SEGW; el archivo local las completa o las sobrescribe. Orden de prioridad: el archivo local gana al servicio."],
+          ], "Qué contiene el archivo"),
+        ],
+        check: () => !!uP("zsmart") && !!uF("zsmart", "webapp/annotations/annotation.xml"),
+        hint: "Crea el proyecto zsmart con la plantilla OData.",
+      },
+      {
+        id: "u8s2",
+        title: "SmartFilterBar y SmartTable",
+        body: [
+          "Los <b>smart controls</b> (librería <code>sap.ui.comp</code>) leen metadata y anotaciones y se construyen solos. En <code>zsmart</code> reemplaza la vista principal:",
+          file(`<mvc:View controllerName="zui5.zsmart.controller.Main"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:smartFilterBar="sap.ui.comp.smartfilterbar"
+    xmlns:smartTable="sap.ui.comp.smarttable"
+    xmlns="sap.m">
+    <Page id="page" title="{i18n>title}">
+        <content>
+            <smartFilterBar:SmartFilterBar
+                id="filtros"
+                entitySet="Flights"
+                persistencyKey="filtrosVuelos"/>
+            <smartTable:SmartTable
+                id="tablaVuelos"
+                entitySet="Flights"
+                smartFilterId="filtros"
+                tableType="ResponsiveTable"
+                useExportToExcel="true"
+                useVariantManagement="false"
+                useTablePersonalisation="true"
+                header="Vuelos"
+                showRowCount="true"
+                enableAutoBinding="true"
+                class="sapUiResponsiveContentPadding"/>
+        </content>
+    </Page>
+</mvc:View>`, "webapp/view/Main.view.xml"),
+          "Añade también la librería en <code>manifest.json</code>, en <code>sap.ui5 - dependencies - libs</code>: <code>\"sap.ui.comp\": {}</code>. Ejecuta: aparecen los filtros de UI.SelectionFields y las columnas de UI.LineItem sin haber escrito ninguna columna. Prueba el botón de configuración de la tabla (columnas, orden) y la exportación a Excel.",
+          terms([
+            ["SmartFilterBar entitySet=\"Flights\"", "Crea la barra de filtros a partir de las propiedades filtrables (sap:filterable) y de UI.SelectionFields. Incluye ayuda de búsqueda si hay ValueList."],
+            ["SmartTable smartFilterId", "Enlaza la tabla con la barra: al pulsar Ir, la tabla aplica los filtros en el servidor ($filter)."],
+            ["tableType", "ResponsiveTable (sap.m.Table), GridTable (sap.ui.table.Table), AnalyticalTable o TreeTable."],
+            ["enableAutoBinding", "La tabla carga datos al arrancar, sin esperar a Ir."],
+            ["useTablePersonalisation", "El usuario puede elegir columnas, orden, agrupación y filtros (diálogo P13n)."],
+            ["Otros smart controls", "SmartField (un campo que se adapta al tipo y a los permisos), SmartForm, SmartChart, SmartVariantManagement (guardar vistas), SmartLink (navegación por semantic object)."],
+          ]),
+        ],
+        check: () => ctl("zsmart", "sap.ui.comp.smarttable.SmartTable") >= 1 && ctl("zsmart", "sap.ui.comp.smartfilterbar.SmartFilterBar") >= 1 && okRun("zsmart"),
+        hint: "Muestra SmartFilterBar y SmartTable en zsmart.",
+      },
+      {
+        id: "u8s3",
+        title: "Cambiar la pantalla sin tocar la vista",
+        body: [
+          "En <code>zsmart</code> edita <code>annotation.xml</code> en la parte de <code>ZFLIGHT_SRV.Flight</code>:",
+          "1. En <code>UI.LineItem</code> añade una columna para el tipo de avión:<br><code>&lt;Record Type=\"UI.DataField\"&gt;&lt;PropertyValue Property=\"Value\" Path=\"Planetype\"/&gt;&lt;/Record&gt;</code><br>2. En <code>UI.SelectionFields</code> añade <code>&lt;PropertyPath&gt;Planetype&lt;/PropertyPath&gt;</code>.",
+          "Ejecuta de nuevo: la columna y el filtro nuevos aparecen sin haber cambiado la vista XML. Así se mantienen las aplicaciones de Fiori elements: la interfaz se cambia en las anotaciones (o en CDS en el back-end).",
+          terms([
+            ["UI.DataField", "Campo simple. Variantes: DataFieldForAction (botón que llama a una acción OData), DataFieldWithUrl (enlace), DataFieldForAnnotation (por ejemplo un indicador o un gráfico)."],
+            ["UI.Importance", "Indica qué columnas se ocultan primero en pantallas pequeñas (High, Medium, Low)."],
+            ["Annotation Modeler / Service Modeler", "En Business Application Studio se editan las anotaciones con ayuda (code completion y vista gráfica)."],
+          ]),
+        ],
+        check: () => /Path="Planetype"/.test(uF("zsmart", "webapp/annotations/annotation.xml")) && /<PropertyPath>\s*Planetype\s*<\/PropertyPath>/.test(uF("zsmart", "webapp/annotations/annotation.xml")) && okRun("zsmart"),
+        hint: "Añade Planetype a UI.LineItem y UI.SelectionFields de Flight y ejecuta.",
+      },
+      {
+        id: "u8s4",
+        title: "SAP Fiori elements: List Report y Object Page",
+        body: [
+          "<b>SAP Fiori elements</b> va un paso más allá: no hay vistas ni controladores. Crea en ZUI5 un proyecto con la plantilla <b>SAP Fiori elements: List Report y Object Page</b>, nombre <code>zfelist</code>, título <code>Conexiones</code>. Observa lo que <b>no</b> tiene: ni carpeta view ni controller. Ejecuta, pulsa <b>Ir</b> y haz clic en una conexión: se abre la página de objeto con las secciones Ruta y Vuelos de las anotaciones.",
+          terms([
+            ["Component.js extends AppComponent", "El componente hereda de sap.suite.ui.generic.template.lib.AppComponent: Fiori elements genera las páginas."],
+            ["manifest.json - sap.ui.generic.app.pages", "Define la plantilla de cada página: ListReport sobre Connections y, debajo, ObjectPage. Para añadir otra página (por ejemplo el detalle de un vuelo) se añade un nivel con navigationProperty: ToFlights."],
+            ["Floorplans (plantillas)", "<b>List Report</b> (lista con filtros), <b>Object Page</b> (detalle de un objeto), <b>Worklist</b> (lista de tareas sin barra de filtros grande), <b>Overview Page</b> (tarjetas con resúmenes), <b>Analytical List Page</b> (análisis con gráficos y tabla)."],
+            ["OData V2 y OData V4", "Fiori elements V2 (sap.suite.ui.generic.template, el que usas aquí) y V4 (sap.fe.templates, para servicios RAP / CAP). La idea es la misma; cambian librería y manifest."],
+            ["Extensiones", "Si la plantilla no alcanza: extensiones de controlador, columnas o secciones propias (fragments) declaradas en el manifest. En V4 existe además el Flexible Programming Model (FPM) para mezclar bloques de Fiori elements con código propio."],
+            ["Herramientas en BAS", "Generador de aplicaciones Fiori, <b>Page Map</b> (configurar páginas visualmente), <b>Guided Development</b> (asistentes paso a paso) y el editor de anotaciones."],
+            ["Draft", "Borrador: los cambios se guardan en el servidor mientras se edita (Editar, Guardar, Descartar). Lo gestionan RAP o la infraestructura del back-end."],
+          ]),
+          "Reto: en <code>annotation.xml</code> del proyecto zfelist añade la columna <code>Countryfr</code> al LineItem de Connection y comprueba el cambio.",
+        ],
+        check: () => !!uP("zfelist") && ctl("zfelist", "sap.ui.comp.smarttable.SmartTable") >= 1 && (uR("zfelist")?.hashes || []).some((x) => /Connections\(/.test(x || "")),
+        hint: "Ejecuta zfelist y abre una conexión (página de objeto).",
+      },
+    ],
+  },
+  {
+    id: "u9",
+    title: "UI5 Paso 9",
+    subtitle: "Launchpad, navegación entre aplicaciones, gráficos y diseño",
+    steps: [
+      {
+        id: "u9s1",
+        title: "SAP Fiori launchpad: catálogos, espacios y tiles",
+        body: [
+          "El <b>SAP Fiori launchpad</b> (FLP) es la entrada única del usuario: muestra las aplicaciones como <b>tiles</b> (mosaicos) según su rol. Cómo se configura (tema del examen):",
+          terms([
+            ["Catálogo técnico / de negocio", "Un catálogo agrupa tiles y <b>target mappings</b> (las aplicaciones disponibles). El catálogo de negocio es el que se asigna a los roles."],
+            ["Espacios y páginas (spaces & pages)", "Lo que el usuario ve en su pantalla de inicio: un espacio tiene páginas y cada página secciones con tiles. Sustituye a los antiguos <b>grupos</b>."],
+            ["Rol (PFCG)", "Se asignan catálogos y espacios a un rol y el rol a los usuarios. Sin rol, la aplicación no aparece aunque esté desplegada."],
+            ["Tile estático / dinámico", "Estático: título, subtítulo e icono. Dinámico: muestra un número que se lee de un servicio OData (por ejemplo, pedidos pendientes)."],
+            ["Target mapping", "Relaciona un <b>intent</b> (objeto semántico + acción, por ejemplo Vuelo-display) con la aplicación concreta (id del componente SAPUI5, URL y parámetros)."],
+            ["Transacciones", "/UI2/FLPD_CUST y /UI2/FLPD_CONF (diseñador del launchpad: catálogos), /UI2/FLPCM_CUST o la app Manage Launchpad Spaces (espacios y páginas), /UI2/FLP (abrir el launchpad), /UI2/FLIA (análisis de intents), /UI2/SEMOBJ (objetos semánticos). En SAP BTP: SAP Build Work Zone."],
+            ["Tipos de aplicación Fiori", "Transaccionales (crear y modificar, SAPUI5), analíticas (KPIs, Overview Page, ALP), fact sheets (antiguas, detalle de objeto). También se pueden lanzar transacciones SAP GUI y Web Dynpro desde el launchpad."],
+          ]),
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+      {
+        id: "u9s2",
+        title: "Navegación por intents (crossNavigation)",
+        body: [
+          "Para que una aplicación se pueda abrir desde el launchpad o desde otra aplicación, se declara un <b>inbound</b> en su manifest. En el proyecto <code>zvuelos</code> (Paso 1) añade dentro de <code>\"sap.app\"</code>:",
+          file(`"crossNavigation": {
+    "inbounds": {
+        "vuelos-display": {
+            "semanticObject": "Vuelo",
+            "action": "display",
+            "title": "{{appTitle}}",
+            "signature": {
+                "parameters": {},
+                "additionalParameters": "allowed"
+            }
+        }
+    }
+}`, "webapp/manifest.json (dentro de sap.app)"),
+          "Desde otra aplicación se navega con el servicio de navegación del launchpad, sin conocer la URL ni el id de la aplicación destino:",
+          file(`sap.ui.require(["sap/ushell/Container"], async (Container) => {
+    const oNavigation = await Container.getServiceAsync("Navigation");
+    oNavigation.navigate({
+        target: { semanticObject: "Vuelo", action: "display" },
+        params: { Carrid: "LH" }
+    });
+});`, "controlador de la aplicación origen"),
+          terms([
+            ["Intent", "Objeto semántico + acción + parámetros. En la URL del launchpad: <code>#Vuelo-display?Carrid=LH</code>."],
+            ["semanticObject", "Concepto de negocio (Vuelo, SalesOrder, Customer). Se crea en /UI2/SEMOBJ o se usa uno estándar."],
+            ["inbound / outbound", "Inbound: cómo se puede abrir esta aplicación. Outbound: a qué intents navega."],
+            ["Navigation (antes CrossApplicationNavigation)", "Servicio del launchpad (sap.ushell). Solo existe dentro del launchpad: por eso en la vista previa standalone no se puede usar; en BAS se prueba con test/flpSandbox.html."],
+            ["SmartLink / navegación por semantic object", "Los smart controls muestran enlaces a todas las aplicaciones con ese objeto semántico (popover de navegación)."],
+          ]),
+        ],
+        check: () => {
+          try {
+            const m = JSON.parse(uF("zvuelos", "webapp/manifest.json") || "{}");
+            const ib = Object.values(m["sap.app"]?.crossNavigation?.inbounds || {});
+            return ib.some((x) => x.semanticObject && x.action);
+          } catch {
+            return false;
+          }
+        },
+        hint: "Añade crossNavigation.inbounds con semanticObject y action al manifest de zvuelos.",
+      },
+      {
+        id: "u9s3",
+        title: "Gráficos con VizFrame",
+        body: [
+          "Los gráficos forman parte de SAPUI5 Foundations en el temario. En <code>zvuelos</code> crea una vista nueva o añade al final de la página principal este gráfico de ocupación (usa el modelo JSON <code>vuelos</code> de los primeros pasos):",
+          file(`<viz:VizFrame id="graficoOcupacion"
+    xmlns:viz="sap.viz.ui5.controls"
+    xmlns:viz.data="sap.viz.ui5.data"
+    xmlns:viz.feeds="sap.viz.ui5.controls.common.feeds"
+    vizType="column"
+    width="100%"
+    height="360px"
+    uiConfig="{applicationSet: 'fiori'}"
+    vizProperties="{ title: { text: 'Plazas ocupadas por vuelo' }, plotArea: { dataLabel: { visible: true } } }">
+    <viz:dataset>
+        <viz.data:FlattenedDataset data="{vuelos>/flights}">
+            <viz.data:dimensions>
+                <viz.data:DimensionDefinition name="Vuelo" value="{vuelos>carrid} {vuelos>connid}"/>
+            </viz.data:dimensions>
+            <viz.data:measures>
+                <viz.data:MeasureDefinition name="Ocupadas" value="{vuelos>seatsocc}"/>
+                <viz.data:MeasureDefinition name="Capacidad" value="{vuelos>seatsmax}"/>
+            </viz.data:measures>
+        </viz.data:FlattenedDataset>
+    </viz:dataset>
+    <viz:feeds>
+        <viz.feeds:FeedItem uid="valueAxis" type="Measure" values="Ocupadas,Capacidad"/>
+        <viz.feeds:FeedItem uid="categoryAxis" type="Dimension" values="Vuelo"/>
+    </viz:feeds>
+</viz:VizFrame>`, "webapp/view/Main.view.xml (dentro de content)"),
+          "Si tu proyecto no tiene el modelo <code>vuelos</code> del Paso 2, cámbialo por el nombre de tu modelo JSON. Ejecuta y prueba cambiar <code>vizType</code> a <code>bar</code>, <code>line</code> o <code>donut</code>.",
+          terms([
+            ["sap.viz (VizFrame)", "Librería de gráficos de SAPUI5 (no está en OpenUI5). Alternativas: sap.suite.ui.microchart (micrográficos dentro de tablas y tiles) y SmartChart (con anotaciones UI.Chart)."],
+            ["FlattenedDataset", "Convierte el modelo en filas con <b>dimensiones</b> (categorías: el texto del eje) y <b>medidas</b> (los números)."],
+            ["feeds", "Qué medida o dimensión va en cada eje (valueAxis, categoryAxis, color...)."],
+            ["uiConfig applicationSet: 'fiori'", "Aplica el estilo visual de Fiori al gráfico."],
+          ]),
+        ],
+        check: () => ctl("zvuelos", "sap.viz.ui5.controls.VizFrame") >= 1 && okRun("zvuelos"),
+        hint: "Muestra un VizFrame en zvuelos.",
+      },
+      {
+        id: "u9s4",
+        title: "Diseño Fiori, Design Thinking y datos avanzados",
+        body: [
+          "Últimos temas del temario que se preguntan sobre todo de forma teórica:",
+          terms([
+            ["5 principios de diseño Fiori", "<b>Basado en roles</b> (cada usuario ve lo que necesita), <b>adaptable</b> (a dispositivos y contextos), <b>simple</b> (una tarea, lo esencial: 1-1-3: un usuario, un caso de uso, tres pantallas), <b>coherente</b> (mismo lenguaje visual) y <b>agradable</b> (delightful)."],
+            ["Design Thinking", "Método centrado en el usuario en dos espacios: <b>espacio del problema</b> (descubrir: entrevistar y observar a usuarios, definir el problema, personas) y <b>espacio de la solución</b> (idear, prototipar y probar con usuarios, iterar). Herramientas: personas, journey maps, prototipos de baja y alta fidelidad (SAP Build, Figma con el kit de Fiori)."],
+            ["Elementos de la UX", "Floorplans (List Report, Object Page, Worklist...), controles estándar, patrones de mensajes, navegación, tematización (temas sap_horizon, sap_fiori_3, alto contraste) y accesibilidad."],
+            ["Registrar un servicio OData", "En el sistema front-end (Gateway): transacción /IWFND/MAINT_SERVICE (añadir servicio y alias del sistema back-end). Pruebas con /IWFND/GW_CLIENT; errores en /IWFND/ERROR_LOG."],
+            ["Deep insert", "Crear un objeto con sus hijos en una sola petición: oModel.create(\"/Connections\", { Carrid: \"LH\", Connid: \"9999\", ToFlights: [{ ... }, { ... }] }). El back-end debe implementarlo (CREATE_DEEP_ENTITY)."],
+            ["$batch y grupos de cambios", "El ODataModel V2 agrupa peticiones en un $batch; con setDeferredGroups y submitChanges se envían varios cambios juntos (como una LUW)."],
+            ["FacetFilter", "Control sap.m.FacetFilter: filtros por facetas (listas de valores con selección múltiple), útil con muchos criterios."],
+            ["Arquitectura", "Front-end server (SAP Gateway + librería SAPUI5 + launchpad) separado o embebido en el back-end (S/4HANA), Web Dispatcher como punto de entrada y, en la nube, SAP BTP con Cloud Connector hacia el sistema on-premise."],
+          ], "Temas teóricos"),
+          "Con esto completas las áreas del temario C_FIORD. Para el examen real, SAP recomienda la learning journey oficial en learning.sap.com y práctica en un sistema real.",
+        ],
+        check: () => false,
+        hint: "Lee el contenido y pulsa Marcar como hecho.",
+      },
+    ],
+  },
 ];
