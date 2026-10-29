@@ -1,5 +1,6 @@
 // Guías de práctica paso a paso con validación automática.
 import { NAMING_WHY, namingTerms } from "./naming.js";
+import { UI5_GUIDES } from "./guides-ui5.js";
 import { h, esc } from "./ui.js";
 import { store } from "./store.js";
 
@@ -2308,6 +2309,8 @@ WRITE: / 'Contador:', lv_contador,
   },
 ];
 
+GUIDES.push(...UI5_GUIDES);
+
 // ---- "Hazlo tú": ejercicios sin código para copiar al final de cada paso ----
 const practice = (id) => ({ practice: id });
 const gameDone = (id) => !!store.data.games?.[id]?.done;
@@ -2527,6 +2530,7 @@ export function guidePanel(app, host) {
                           : h(
                             "div",
                             { class: "g-codewrap" },
+                            b.file ? h("div", { class: "g-codefile" }, b.file) : null,
                             h("pre", { class: "g-code" }, b.code),
                             h(
                               "button",

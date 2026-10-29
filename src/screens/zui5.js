@@ -268,7 +268,8 @@ export function ideScreen(app, name) {
       const controls = {};
       const texts = [];
       const props = [];
-      for (const c of Element.registry.all ? Element.registry.all() : []) {
+      const all = Object.values(Element.registry.all ? Element.registry.all() : {});
+      for (const c of all) {
         const t = c.getMetadata().getName();
         controls[t] = (controls[t] || 0) + 1;
         for (const g of ["getText", "getTitle", "getValue", "getDescription", "getNumber", "getHeaderText", "getInfo", "getLabel"]) {
@@ -284,12 +285,12 @@ export function ideScreen(app, name) {
         if (t === "sap.m.Input" || t === "sap.m.Text" || t === "sap.m.Title") props.push({ t, bound: !!c.getBindingInfo?.(t === "sap.m.Input" ? "value" : "text") });
       }
       const models = {};
-      for (const c of Element.registry.all ? Element.registry.all() : []) {
+      for (const c of all) {
         const oModels = c.oModels || {};
         for (const [k, m] of Object.entries(oModels)) models[k || "(default)"] = m.getMetadata().getName();
       }
       const comp = w.sap.ui.require("sap/ui/core/Component");
-      const comps = comp?.registry?.all ? comp.registry.all() : [];
+      const comps = Object.values(comp?.registry?.all ? comp.registry.all() : {});
       for (const cc of comps) for (const [k, m] of Object.entries(cc.oModels || {})) models[k || "(default)"] = m.getMetadata().getName();
       const hash = w.location.hash;
       return { controls, texts: texts.slice(0, 500), bound: props.filter((x) => x.bound).length, models, hash };
@@ -297,17 +298,48 @@ export function ideScreen(app, name) {
       return { error: e.message };
     }
   };
+  const inspectQUnit = () => {
+    try {
+      const d = frame.contentWindow.document;
+      const r = d.getElementById("qunit-testresult");
+      if (!r) return null;
+      const n = (c) => Number(r.querySelector("." + c)?.textContent || 0);
+      return { total: n("total"), passed: n("passed"), failed: n("failed"), text: r.textContent.slice(0, 200) };
+    } catch (e) {
+      return { error: e.message };
+    }
+  };
   const record = () => {
+    if (runFile !== "index.html") {
+      const q = inspectQUnit();
+      if (q) {
+        ((store.data.ui5Tests ||= {})[name] = { at: new Date().toISOString(), file: runFile, ...q });
+        store.save();
+      }
+      return;
+    }
     const s = inspect();
-    if (!s) return;
+    if (!s || s.error) return;
+    const prev = store.data.ui5Runs?.[name];
+    if (prev && prev.hashes) s.hashes = [...new Set([...prev.hashes, s.hash])].slice(-20);
+    else s.hashes = [s.hash];
+    if (prev && prev.at && Date.now() - new Date(prev.at).getTime() < 60000 && prev.controlsMax) {
+      s.controlsMax = { ...prev.controlsMax };
+      for (const [k, v] of Object.entries(s.controls)) s.controlsMax[k] = Math.max(s.controlsMax[k] || 0, v);
+    } else s.controlsMax = { ...s.controls };
+    if (JSON.stringify(prev && { c: prev.controls, h: prev.hash, e: prev.errors }) === JSON.stringify({ c: s.controls, h: s.hash, e: consoleLines.filter((l) => l.type === "error").length })) return;
     const errors = consoleLines.filter((l) => l.type === "error").length;
     ((store.data.ui5Runs ||= {})[name] = { at: new Date().toISOString(), errors, ...s });
     store.save();
     app.guide?.refresh?.();
   };
   let recordTimer = null;
+  let pollTimer = null;
+  let langSel = null;
+  let runFile = "index.html";
 
-  const run = async () => {
+  const run = async (opts) => {
+    runFile = opts?.file || "index.html";
     saveAll(true);
     const problems = await checkAll();
     consoleLines = [];
@@ -328,12 +360,18 @@ export function ideScreen(app, name) {
     }
     log("info", `> npm start  (ui5 serve) - http://localhost:8080/index.html  - SAPUI5 desde ${cdnUrl()}`);
     statusEl.textContent = "Cargando la aplicación...";
-    frame.src = previewUrl(name) + "?t=" + Date.now();
+    const lang = langSel?.value || "ES";
+    frame.src = previewUrl(name, runFile) + `?sap-language=${lang}&t=${Date.now()}`;
     frame.onload = () => {
       statusEl.textContent = "Aplicación en ejecución";
       clearTimeout(recordTimer);
       recordTimer = setTimeout(record, 2500);
       setTimeout(record, 6000);
+      clearInterval(pollTimer);
+      pollTimer = setInterval(() => {
+        if (!frame.isConnected) return clearInterval(pollTimer);
+        record();
+      }, 3000);
     };
   };
 
@@ -376,14 +414,15 @@ export function ideScreen(app, name) {
     title: () => `SAPUI5: ${name} - ${proj()?.title || ""}`,
     toolbar: () => [
       { icon: "save", label: "Grabar todo", key: "Ctrl+S", action: () => saveAll() },
-      { icon: "exec", label: "Ejecutar (npm start)", key: "F8", action: run },
+      { icon: "exec", label: "Ejecutar (npm start)", key: "F8", action: () => run() },
+      { icon: "unit", label: "Ejecutar este HTML", text: true, tip: "Abre en la vista previa el archivo .html actual (por ejemplo una página de pruebas QUnit)", action: () => (current.endsWith(".html") && current.startsWith("webapp/") ? run({ file: current.slice(7) }) : app.status("Abra primero un archivo .html de webapp/ (por ejemplo webapp/test/unit/unitTests.qunit.html)", "W")) },
       "-",
       { icon: "create", label: "Nuevo archivo", text: true, action: newFile },
       { icon: "delete", label: "Borrar archivo", action: deleteFile },
       "-",
       { icon: "expand", label: "Abrir en pestaña nueva", text: true, action: async () => { saveAll(true); await publishProject(name, proj().files); window.open(previewUrl(name), "_blank"); } },
     ],
-    keys: { "Ctrl+S": () => saveAll(), F8: run },
+    keys: { "Ctrl+S": () => saveAll(), F8: () => run() },
     render(el) {
       treeEl = h("div", { class: "ui5-tree" });
       tabEl = h("div", { class: "ui5-tab" });
@@ -401,7 +440,16 @@ export function ideScreen(app, name) {
           h(
             "div",
             { class: "ui5-preview" },
-            h("div", { class: "ui5-prev-head" }, h("b", {}, "Vista previa"), statusEl, h("button", { class: "btn small", title: "Volver a cargar (F8)", onclick: run }, h("span", { class: "ico ico-refresh" }))),
+            h(
+              "div",
+              { class: "ui5-prev-head" },
+              h("b", {}, "Vista previa"),
+              statusEl,
+              h("span", { class: "spacer" }),
+              (langSel = h("select", { class: "sap-input mini-sel", title: "Idioma (sap-language)", onchange: () => run({ file: runFile }) }, h("option", { value: "ES" }, "ES"), h("option", { value: "EN" }, "EN"))),
+              h("select", { class: "sap-input mini-sel", title: "Tamaño de pantalla", onchange: (e) => { frame.style.width = e.target.value; frame.style.margin = e.target.value === "100%" ? "0" : "0 auto"; } }, h("option", { value: "100%" }, "Escritorio"), h("option", { value: "768px" }, "Tableta"), h("option", { value: "375px" }, "Teléfono")),
+              h("button", { class: "btn small", title: "Volver a cargar (F8)", onclick: () => run({ file: runFile }) }, h("span", { class: "ico ico-refresh" })),
+            ),
             frame,
             h("div", { class: "ui5-con-head" }, h("b", {}, "Consola"), consoleCount, h("button", { class: "btn small", onclick: () => { consoleLines = []; renderConsole(); } }, "Limpiar")),
             consoleEl,
@@ -422,6 +470,7 @@ export function ideScreen(app, name) {
       return true;
     },
     destroy() {
+      clearInterval(pollTimer);
       window.removeEventListener("message", onMessage);
       editor?.dispose();
       editor = null;

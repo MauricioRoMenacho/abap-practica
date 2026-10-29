@@ -81,6 +81,7 @@ async function boot() {
   const app = new App(root, { transactions, guide: guidePanel });
   app.engine = engine;
   window.__app = app;
+  window.__store = store;
   window.__openGame = (id) => openGame(app, id);
   app.guide.render();
   app.home();

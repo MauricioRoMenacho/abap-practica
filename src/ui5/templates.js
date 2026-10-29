@@ -1,5 +1,5 @@
 // Plantillas de proyecto SAPUI5 (como los generadores de Business Application Studio).
-import { metadataXml, mockData, SERVICE_URL } from "./odata.js";
+import { metadataXml, mockData, jsonFlights, SERVICE_URL } from "./odata.js";
 
 export const NAMESPACE = "zui5";
 export const appId = (name) => `${NAMESPACE}.${name}`;
@@ -235,6 +235,7 @@ export function createProject(template, name, title, engine) {
     "webapp/controller/Main.controller.js": mainController(name),
     "webapp/i18n/i18n.properties": i18n(title, "es"),
     "webapp/i18n/i18n_en.properties": i18n(title, "en"),
+    "webapp/model/vuelos.json": JSON.stringify(jsonFlights(engine), null, 1) + "\n",
     "webapp/css/style.css": "/* Estilos propios de la aplicación. Úsalos con moderación: los controles ya siguen el diseño SAP Fiori. */\n",
   };
   if (odata) {
