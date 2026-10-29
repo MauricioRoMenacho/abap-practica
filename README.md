@@ -13,12 +13,18 @@ campo de comandos, transacciones, F3/F8, barra de estado… sin paquetes ni órd
 | **SE84** | Buscar programas y tablas por nombre o descripción. |
 
 - **Motor ABAP real**: el código se transpila a JavaScript con [abaplint transpiler](https://github.com/abaplint/transpiler) y se ejecuta con su runtime. Soporta ABAP moderno (expresiones en línea, string templates, clases locales, excepciones) y clásico (FORM, eventos, pantallas de selección).
-- **Base de datos SQLite** (sql.js) en el navegador, persistida en `localStorage`. Incluye las tablas de ejemplo **SCARR**, **SPFLI** y **SFLIGHT** con datos.
+- **Base de datos SQLite** (sql.js) en el navegador, persistida en `localStorage`. Incluye tablas estándar con datos coherentes entre sí: vuelos (SCARR, SPFLI, SFLIGHT, SBOOK, SCUSTOM), finanzas (T001, T005, TCURC), ventas (KNA1, VBAK, VBAP), compras (LFA1, EKKO, EKPO), materiales (MARA, MAKT) y personal (PA0001, PA0002, PA0008).
+- **Includes** (programas de tipo I) con navegación por doble clic y verificación dentro del programa principal.
+- **Depurador**: puntos de parada en el margen del editor, `BREAK-POINT`, F5/F6/F8, variables, tablas internas, estructuras y objetos.
 - **Pantalla de selección**: PARAMETERS (checkbox, radiobutton, OBLIGATORY, LOWER CASE), SELECT-OPTIONS con selección múltiple, bloques con marco, textos de selección.
 - **Eventos**: INITIALIZATION, AT SELECTION-SCREEN, START-OF-SELECTION, END-OF-SELECTION, TOP-OF-PAGE.
 - **ALV con `CL_SALV_TABLE`**: barra de pulsadores (`set_all`/`set_default`), columnas (optimizar, textos, ocultar), título, cebra, orden, subtotales y totales, detalle, filtro, layout y exportación a hoja de cálculo.
 - **Mensajes** (`MESSAGE ... TYPE 'S'/'I'/'W'/'E'`, `DISPLAY LIKE`) y **dumps** tipo ST22 (excepciones no capturadas, bucles infinitos).
-- **Guías de práctica** paso a paso (Paso 1: fundamentos, SE11/SE16, SELECT; Paso 2: reportes ALV) que se validan solas.
+- **Guías de práctica** paso a paso que se validan solas, con explicación de la sintaxis en cada código:
+  - Paso 1: fundamentos, campos SY, pantalla de selección, SE11/SE16, SELECT e INCLUDE
+  - Paso 2: reportes ALV
+  - Paso 3: tablas internas, depurador, tablas estándar y JOINs
+  - Paso 4: programación orientada a objetos
 
 ## Desarrollo local
 
