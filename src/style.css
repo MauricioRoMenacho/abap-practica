@@ -2563,3 +2563,33 @@ body.guide-window {
 .grid-table.trace td.sql { white-space: pre-wrap; word-break: break-all; font-size: 12px; max-width: 640px; }
 .grid-table.trace tr.dup td { background: #fff4e0; }
 .grid-table.trace tr.slow td { color: #b00020; }
+
+/* ATC / ABAP Unit */
+.atc-summary { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.atc-chip { border: 1px solid #ccc; background: #fff; border-radius: 14px; padding: 3px 10px; cursor: pointer; font: inherit; display: inline-flex; align-items: center; gap: 6px; }
+.atc-chip.active { border-color: #0a6ed1; background: #eaf3fc; }
+.atc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+.atc-dot.p1 { background: #bb0000; }
+.atc-dot.p2 { background: #e9730c; }
+.atc-dot.p3 { background: #0a6ed1; }
+.atc-clean { padding: 12px; background: #e5f4e8; border: 1px solid #9fd1ab; color: #1e6b33; border-radius: 4px; }
+.grid-table.atc tr.clickable { cursor: pointer; }
+.grid-table.atc tr.clickable:hover td { background: #f2f7fc; }
+.unit-banner { padding: 8px 12px; border-radius: 4px; font-weight: 600; margin-bottom: 10px; }
+.unit-banner.good { background: #e5f4e8; color: #1e6b33; border: 1px solid #9fd1ab; }
+.unit-banner.bad { background: #fdeaea; color: #a00; border: 1px solid #f0a8a8; }
+.unit-banner.none { background: #f3f3f3; color: #555; border: 1px solid #ddd; }
+.unit-layout { display: grid; grid-template-columns: minmax(280px, 1fr) 1.2fr; gap: 12px; }
+.unit-tree { border: 1px solid #ddd; border-radius: 4px; padding: 6px; background: #fff; }
+.unit-node { padding: 3px 6px; display: flex; align-items: center; gap: 6px; }
+.unit-node.cls { padding-left: 18px; font-weight: 600; }
+.unit-node.meth { padding-left: 36px; cursor: pointer; font-family: monospace; }
+.unit-node.meth:hover, .unit-node.meth.active { background: #eaf3fc; }
+.unit-st { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.unit-st.good { background: #2b7d2b; }
+.unit-st.bad { background: #bb0000; }
+.unit-st.err { background: #e9730c; }
+.unit-detail { border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: #fff; }
+.unit-ok { color: #1e6b33; }
+.unit-fail { color: #bb0000; font-weight: 600; }
+.unit-err { color: #b55a00; font-weight: 600; }

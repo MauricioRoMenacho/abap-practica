@@ -1,6 +1,7 @@
 // Motor: verifica, transpila y ejecuta programas ABAP en el navegador.
 import * as abaplint from "@abaplint/core";
 import { Transpiler, config as transpilerConfig } from "@abaplint/transpiler";
+import { ATC_RULES, atcRulesConfig, findUnsecureFae } from "./atc.js";
 import { TranspileTypes } from "@abaplint/transpiler/build/src/transpile_types.js";
 import { ABAP, MemoryConsole } from "@abaplint/runtime";
 import { preprocess } from "./preprocess.js";
@@ -242,7 +243,7 @@ export class Engine {
       src = inst.source;
       dbgTable = inst.table;
     }
-    const pp = preprocess(src, program.name, ctx.texts || {});
+    const pp = preprocess(src, program.name, ctx.texts || {}, { unit: !!ctx.unit });
     pp.expansion = exp;
     pp.dbgTable = dbgTable;
     const progFile = program.name.toLowerCase() + ".prog.abap";
@@ -309,6 +310,42 @@ export class Engine {
       errors.push(e);
     }
     return errors.sort((a, b) => a.row - b.row);
+  }
+
+  // ATC / Code Inspector: reglas de calidad sobre el código original (con includes expandidos)
+  atc(program, ctx) {
+    const exp = expandIncludes(program.source, program.name, ctx.resolveInclude || (() => null));
+    const progFile = program.name.toLowerCase() + ".prog.abap";
+    const files = [
+      ...this.libFiles.map((f) => new abaplint.MemoryFile(f.filename, f.contents)),
+      ...ctx.tables.map((t) => new abaplint.MemoryFile(t.name.toLowerCase() + ".tabl.xml", tableToXml(t))),
+      ...(ctx.extraFiles || []).map((f) => new abaplint.MemoryFile(f.filename, f.contents)),
+      new abaplint.MemoryFile(progFile, exp.source),
+    ];
+    const base = JSON.parse(JSON.stringify(transpilerConfig));
+    const reg = new abaplint.Registry(new abaplint.Config(JSON.stringify(atcRulesConfig(base, abaplint)))).addFiles(files);
+    reg.parse();
+    const main = program.name.toUpperCase();
+    const out = [];
+    const seen = new Set();
+    for (const i of reg.findIssues()) {
+      if (i.getFilename() !== progFile) continue;
+      const rule = ATC_RULES[i.getKey()];
+      if (!rule) continue;
+      const row = i.getStart().getRow();
+      const m = exp.map[row - 1] || { obj: main, line: row };
+      const k = i.getKey() + ":" + m.obj + ":" + m.line + ":" + i.getMessage();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ key: i.getKey(), prio: rule.prio, title: rule.title, help: rule.help, message: i.getMessage(), obj: m.obj, row: m.line, col: i.getStart().getCol() });
+    }
+    for (const f of findUnsecureFae(exp.source)) {
+      const rule = ATC_RULES.unsecure_fae;
+      const m = exp.map[f.row - 1] || { obj: main, line: f.row };
+      out.push({ key: "unsecure_fae", prio: rule.prio, title: rule.title, help: rule.help, message: f.message, obj: m.obj, row: m.line, col: f.col });
+    }
+    out.sort((a, b) => a.prio - b.prio || (a.obj === b.obj ? a.row - b.row : a.obj.localeCompare(b.obj)));
+    return out;
   }
 
   // ¿hay que instrumentar para depurar? (BREAK-POINT, puntos de parada o depuración pedida)
@@ -391,9 +428,85 @@ export class Engine {
       .split("\n")
       .map((l) => (/^\s*(for|while)\b.*\{\s*$/.test(l) || /^\s*do\s*\{\s*$/.test(l) ? l + " globalThis.__abapTick();" : l))
       .join("\n");
+    // ABAP Unit: clases y métodos de prueba
+    let tests = null;
+    if (ctx.unit) {
+      tests = [];
+      const pobj = chk.reg.getObject("PROG", program.name.toUpperCase());
+      for (const f of pobj?.getABAPFiles() || []) {
+        for (const c of f.getInfo().listClassDefinitions()) {
+          if (!c.isForTesting) continue;
+          const names = c.methods.map((m) => m.name.toLowerCase());
+          tests.push({
+            name: c.name.toUpperCase(),
+            risk: c.riskLevel,
+            duration: c.duration,
+            row: c.identifier.getStart().getRow(),
+            methods: c.methods.filter((m) => m.isForTesting).map((m) => ({ name: m.name.toLowerCase(), row: m.identifier.getStart().getRow() })),
+            fixtures: ["class_setup", "setup", "teardown", "class_teardown"].filter((x) => names.includes(x)),
+          });
+        }
+      }
+    }
     const unsupported = [];
     for (const m of progCode.matchAll(/throw new Error\("([^"]*transpiler[^"]*)"\)/g)) unsupported.push(m[1]);
-    return { code: code + "\n" + progCode, meta: chk.pp.meta, unsupported, dbgTable: chk.pp.dbgTable };
+    return { code: code + "\n" + progCode, meta: chk.pp.meta, unsupported, dbgTable: chk.pp.dbgTable, tests };
+  }
+
+  // ---------------- ABAP Unit ----------------
+  async runTests(tests, prog, abap, comp) {
+    const out = [];
+    const Assert = abap.Classes["CX_AUNIT_ASSERT"];
+    const describe = async (e) => {
+      if (Assert && e instanceof Assert) return { status: "fail", msg: e.msg.get(), expected: e.expected.get(), actual: e.actual.get() };
+      const d = await describeDump(e, abap, comp.unsupported);
+      return { status: "error", msg: d.title + (d.text ? ": " + d.text : "") };
+    };
+    for (const t of tests || []) {
+      const C = abap.Classes[`PROG-${prog}-${t.name}`];
+      const res = { name: t.name, risk: t.risk, duration: t.duration, row: t.row, methods: [] };
+      out.push(res);
+      if (!C) {
+        res.error = "No se encontró la clase de prueba";
+        continue;
+      }
+      const has = (f) => t.fixtures.includes(f);
+      try {
+        if (has("class_setup")) await C.class_setup();
+      } catch (e) {
+        res.error = "CLASS_SETUP: " + (await describe(e)).msg;
+        continue;
+      }
+      for (const m of t.methods) {
+        const t0 = performance.now();
+        let r = { status: "ok" };
+        try {
+          const inst = new C();
+          if (inst.constructor_) await inst.constructor_();
+          // los métodos privados se exponen a través de FRIENDS_ACCESS_INSTANCE
+          const call = async (n) => {
+            const f = inst.FRIENDS_ACCESS_INSTANCE?.[n] || inst[n];
+            if (!f) throw new Error(`Método ${n.toUpperCase()} no encontrado`);
+            return f.call(inst.FRIENDS_ACCESS_INSTANCE?.[n] ? inst.FRIENDS_ACCESS_INSTANCE : inst);
+          };
+          if (has("setup")) await call("setup");
+          try {
+            await call(m.name);
+          } finally {
+            if (has("teardown")) await call("teardown");
+          }
+        } catch (e) {
+          r = await describe(e);
+        }
+        res.methods.push({ name: m.name.toUpperCase(), row: m.row, ms: Math.round(performance.now() - t0), ...r });
+      }
+      try {
+        if (has("class_teardown")) await C.class_teardown();
+      } catch {
+        /* ignorar */
+      }
+    }
+    return out;
   }
 
   // ---------------- ejecución ----------------
@@ -663,9 +776,13 @@ export class Engine {
     try {
       const f = new AsyncFunction("abap", comp.code);
       await f(abap);
-      const eos = abap.Forms[`PROG-${program.name.toUpperCase()}-ZZ_EV_EOS`];
-      if (eos) await eos();
-      result = { status: "ok" };
+      if (ctx.unit) {
+        result = { status: "unit", unit: await this.runTests(comp.tests, program.name.toUpperCase(), abap, comp) };
+      } else {
+        const eos = abap.Forms[`PROG-${program.name.toUpperCase()}-ZZ_EV_EOS`];
+        if (eos) await eos();
+        result = { status: "ok" };
+      }
     } catch (e) {
       if (e instanceof AbapCancel) result = { status: "cancel" };
       else if (e instanceof AbapMessageStop) result = { status: "message", type: e.msgType, text: e.message, displayLike: e.displayLike };

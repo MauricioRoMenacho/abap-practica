@@ -1,0 +1,17 @@
+import fs from "fs"; import path from "path";
+import { Engine } from "../src/engine/engine.js";
+import { SQLiteDatabaseClient } from "@abaplint/database-sqlite";
+import { STANDARD_TABLES } from "../src/engine/standard.js";
+import { stdLibFiles } from "../src/engine/stdlib.js";
+const dir = "src/engine/abaplib";
+const libFiles = fs.readdirSync(dir).filter(f => !f.endsWith(".md")).map(f => ({ filename: f, contents: fs.readFileSync(path.join(dir, f), "utf8") }));
+const eng = new Engine({ libFiles: [...libFiles, ...stdLibFiles()], createDbClient: () => new SQLiteDatabaseClient() });
+await eng.openDb(); await eng.syncSchema([]);
+const src = fs.readFileSync(process.argv[2], "utf8");
+const ui = { status(){}, popup: async () => {}, alv: async () => {}, selectionScreen: async (m, v) => v };
+const ctx = { tables: Object.values(STANDARD_TABLES), texts: {} };
+const r = await eng.run({ name: process.env.PN || "ZP6_UNIT", source: src }, { ...ctx, unit: true }, ui);
+console.log(r.status, JSON.stringify(r.errors || r.dump || "", null, 1).slice(0, 800));
+console.log(JSON.stringify(r.unit, null, 1)); console.log("LIST:", r.list);
+const r2 = await eng.run({ name: process.env.PN || "ZP6_UNIT", source: src }, ctx, ui);
+console.log(r2.status, r2.list);

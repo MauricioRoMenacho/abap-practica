@@ -397,6 +397,61 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     });
   };
 
+  // programa que se analiza: un include se analiza dentro de su programa principal
+  const qualityTarget = () => {
+    if (!isInc()) return { name: n, source: editor.getValue() };
+    const mains = store.mainProgramsOf(n);
+    if (!mains.length) return null;
+    const mp = store.program(mains[0]);
+    return { name: mp.name, source: mp.source };
+  };
+  const goFromResult = (obj, line) => {
+    if (obj === n) {
+      opts.gotoLine = line;
+      app.back();
+    } else {
+      app.back();
+      openObject(obj, line);
+    }
+  };
+  const runAtc = async (inner) => {
+    if (inner !== true) return app.busy(`ATC: comprobando la calidad de ${n}...`, () => runAtc(true), 500);
+    save(true);
+    const t = qualityTarget();
+    if (!t) return app.status("Incluya primero este include en un programa", "W");
+    const chk = app.engine.check(t, ctxFor(t.name, "edit"));
+    if (chk.errors.length) {
+      await showErrors(chk.errors);
+      return app.status("Corrija primero los errores de sintaxis", "E");
+    }
+    const findings = app.engine.atc(t, ctxFor(t.name, "edit"));
+    const { atcScreen, recordQuality } = await import("./quality.js");
+    recordQuality("atc", t.name, { p1: findings.filter((f) => f.prio === 1).length, p2: findings.filter((f) => f.prio === 2).length, p3: findings.filter((f) => f.prio === 3).length });
+    app.status(findings.length ? `ATC: ${findings.length} mensaje(s) para ${t.name}` : `ATC: sin mensajes para ${t.name}`, findings.some((f) => f.prio === 1) ? "E" : findings.length ? "W" : "S");
+    app.push(atcScreen(app, t.name, findings, (obj, line) => goFromResult(obj, line)));
+  };
+  const runUnit = async (inner) => {
+    if (inner !== true) return app.busy(`ABAP Unit: ejecutando las pruebas de ${n}...`, () => runUnit(true), 500);
+    save(true);
+    const t = qualityTarget();
+    if (!t) return app.status("Incluya primero este include en un programa", "W");
+    const ctx = { ...ctxFor(t.name, "edit"), unit: true };
+    const ui = { status: () => {}, popup: async () => {}, alv: async () => {}, selectionScreen: async (m, v) => v, confirm: async () => "1", fileRead: async () => null };
+    const res = await app.engine.run(t, ctx, ui);
+    if (res.status === "syntax") {
+      await showErrors(res.errors);
+      return app.status("Corrija primero los errores de sintaxis", "E");
+    }
+    if (res.status !== "unit") return app.status("No se pudieron ejecutar las pruebas: " + (res.dump?.text || res.text || res.status), "E");
+    const all = res.unit.flatMap((c) => c.methods);
+    const bad = all.filter((m) => m.status !== "ok").length;
+    const { unitScreen, recordQuality } = await import("./quality.js");
+    recordQuality("unit", t.name, { total: all.length, failed: bad });
+    if (!all.length) app.status("No hay clases de prueba (FOR TESTING) en el programa", "W");
+    else app.status(bad ? `ABAP Unit: ${bad} de ${all.length} prueba(s) fallaron` : `ABAP Unit: ${all.length} prueba(s) correctas`, bad ? "E" : "S");
+    app.push(unitScreen(app, t.name, res.unit, (obj, line) => goFromResult(obj, line)));
+  };
+
   const navigateInclude = async (inc) => {
     const ip = store.program(inc);
     if (ip) {
@@ -454,6 +509,8 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       { icon: "debug", label: "Depurar", tip: "Ejecutar en el depurador, deteniéndose en la primera instrucción", action: () => execute("step") },
       "-",
       { icon: "pretty", label: "Pretty Printer", key: "Shift+F1", action: pretty, disabled: mode !== "change" },
+      { icon: "search", label: "ATC", tip: "ABAP Test Cockpit: revisión de calidad del código", action: runAtc },
+      { icon: "check", label: "Prueba unitaria", tip: "Ejecutar las pruebas ABAP Unit (Ctrl+Shift+F10)", key: "Ctrl+Shift+F10", action: runUnit },
       { icon: "text", label: "Elementos de texto", action: () => { const target = isInc() ? store.mainProgramsOf(n)[0] : n; if (!target) return app.status("Los elementos de texto pertenecen al programa principal: incluya primero este include en un programa", "W"); app.push(textElementsScreen(app, target, mode)); } },
     ],
     keys: { "Ctrl+S": () => saveBusy() },

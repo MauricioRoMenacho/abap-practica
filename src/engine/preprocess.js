@@ -35,6 +35,10 @@ const PARAM_STRIP = [
   ["NO", "INTERVALS"],
 ];
 
+const UNIT_KEEP = /^(Report|Program|Data|DataBegin|DataEnd|Constant|ConstantBegin|ConstantEnd|Type|TypeBegin|TypeEnd|TypeEnum|TypeEnumBegin|TypeEnumEnd|FieldSymbol|Tables|Parameter|SelectOption|SelectionScreen|TypePools|ClassDefinitionLoad|ClassDeferred|InterfaceDeferred|InterfaceLoad|Ranges|Statics|StaticBegin|StaticEnd|Define|EndOfDefinition|Include|IncludeType|Controls|Empty|Unknown|MacroContent|MacroCall)$/;
+const isEventStatement = (g) =>
+  g instanceof S.Initialization || g instanceof S.AtSelectionScreen || g instanceof S.StartOfSelection || g instanceof S.EndOfSelection || g instanceof S.TopOfPage || g instanceof S.AtLineSelection || g instanceof S.LoadOfProgram || g instanceof S.EndOfPage || g instanceof S.AtUserCommand;
+
 function tokStrs(st) {
   // une los tokens "-" (abaplint separa SELECT-OPTIONS en 3 tokens)
   const out = [];
@@ -58,7 +62,7 @@ function unquote(s) {
   return s;
 }
 
-export function preprocess(source, progName, texts = {}) {
+export function preprocess(source, progName, texts = {}, opts = {}) {
   const lines = source.split("\n");
   const blank = (row, col, len) => {
     const l = lines[row - 1];
@@ -91,6 +95,7 @@ export function preprocess(source, progName, texts = {}) {
   let lastSelDecl = null;
   let reportSt = null;
   let openForm = null; // evento convertido a FORM pendiente de cerrar
+  let unitDepth = 0;
 
   const closeOpenForm = (st) => {
     if (!openForm) return;
@@ -107,6 +112,17 @@ export function preprocess(source, progName, texts = {}) {
     const g = st.get();
     const toks = tokStrs(st);
     const upper = toks.map((t) => t.str.toUpperCase());
+
+    // ABAP Unit: no se ejecuta el programa, solo se conservan las declaraciones globales
+    if (opts.unit) {
+      const cn = g.constructor.name;
+      if (/^(Form|ClassDefinition|ClassImplementation|Interface|Module|FunctionModule|MethodImplementation)$/.test(cn)) unitDepth++;
+      else if (/^(EndForm|EndClass|EndInterface|EndModule|EndFunction|EndMethod)$/.test(cn)) unitDepth--;
+      else if (unitDepth === 0 && !openForm && !UNIT_KEEP.test(cn) && !isEventStatement(g)) {
+        blankStatement(st);
+        continue;
+      }
+    }
 
     if (g instanceof S.Report || g instanceof S.Program) {
       reportSt = st;

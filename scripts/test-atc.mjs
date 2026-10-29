@@ -1,0 +1,12 @@
+import fs from "fs"; import path from "path";
+import { Engine } from "../src/engine/engine.js";
+import { SQLiteDatabaseClient } from "@abaplint/database-sqlite";
+import { STANDARD_TABLES } from "../src/engine/standard.js";
+import { stdLibFiles } from "../src/engine/stdlib.js";
+const dir = "src/engine/abaplib";
+const libFiles = fs.readdirSync(dir).filter(f => !f.endsWith(".md")).map(f => ({ filename: f, contents: fs.readFileSync(path.join(dir, f), "utf8") }));
+const eng = new Engine({ libFiles: [...libFiles, ...stdLibFiles()], createDbClient: () => new SQLiteDatabaseClient() });
+const t0 = Date.now();
+const r = eng.atc({ name: "ZP6_ATC", source: fs.readFileSync(process.argv[2], "utf8") }, { tables: Object.values(STANDARD_TABLES) });
+for (const x of r) console.log(x.prio, x.row, x.key, "|", x.message);
+console.log(Date.now() - t0, "ms");

@@ -314,7 +314,7 @@ export class App {
       this.cmd.focus();
       return;
     }
-    if (/^(F\d+|Shift\+F\d+|Ctrl\+F\d+|Ctrl\+S)$/.test(k)) {
+    if (/^(F\d+|Shift\+F\d+|Ctrl\+F\d+|Ctrl\+Shift\+F\d+|Ctrl\+S)$/.test(k)) {
       if (k === "F4") return; // ayuda de búsqueda: la maneja cada campo
       if (this.trigger(k)) {
         e.preventDefault();

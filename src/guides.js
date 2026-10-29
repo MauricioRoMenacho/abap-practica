@@ -1748,6 +1748,156 @@ START-OF-SELECTION.
       },
     ],
   },
+  {
+    id: "p6",
+    title: "Paso 6",
+    subtitle: "Calidad: pruebas unitarias (ABAP Unit) y ATC",
+    steps: [
+      {
+        id: "p6s1",
+        title: "Tu primera prueba unitaria (ABAP Unit)",
+        body: [
+          "Una <b>prueba unitaria</b> es código que comprueba automáticamente que otro código funciona. Si mañana alguien cambia la lógica y rompe algo, las pruebas lo detectan al instante. En ABAP se escriben como <b>clases locales de prueba</b> (FOR TESTING) dentro del mismo programa, y se ejecutan con <b>Prueba unitaria</b> (Ctrl+Shift+F10) en lugar de F8.",
+          "Crea <code>ZP6_UNIT</code>:",
+          code(`REPORT zp6_unit.
+
+CLASS lcl_precios DEFINITION.
+  PUBLIC SECTION.
+    TYPES ty_monto TYPE p LENGTH 10 DECIMALS 2.
+    METHODS con_igv
+      IMPORTING iv_neto         TYPE ty_monto
+      RETURNING VALUE(rv_total) TYPE ty_monto.
+    METHODS descuento
+      IMPORTING iv_monto        TYPE ty_monto
+                iv_cliente_vip  TYPE abap_bool
+      RETURNING VALUE(rv_desc)  TYPE ty_monto.
+ENDCLASS.
+
+CLASS lcl_precios IMPLEMENTATION.
+  METHOD con_igv.
+    rv_total = iv_neto * '1.18'.
+  ENDMETHOD.
+
+  METHOD descuento.
+    IF iv_cliente_vip = abap_true AND iv_monto >= 1000.
+      rv_desc = iv_monto * '0.10'.
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
+START-OF-SELECTION.
+  DATA(go_precios) = NEW lcl_precios( ).
+  WRITE: / 'Total con IGV de 100:', go_precios->con_igv( 100 ).
+
+" ---------------- Pruebas unitarias ----------------
+CLASS ltc_precios DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+  PRIVATE SECTION.
+    DATA mo_cut TYPE REF TO lcl_precios.
+    METHODS setup.
+    METHODS igv_de_100 FOR TESTING.
+    METHODS vip_con_descuento FOR TESTING.
+    METHODS no_vip_sin_descuento FOR TESTING.
+ENDCLASS.
+
+CLASS ltc_precios IMPLEMENTATION.
+  METHOD setup.
+    mo_cut = NEW #( ).
+  ENDMETHOD.
+
+  METHOD igv_de_100.
+    cl_abap_unit_assert=>assert_equals(
+      act = mo_cut->con_igv( 100 )
+      exp = '118.00'
+      msg = '100 más 18% de IGV debe ser 118' ).
+  ENDMETHOD.
+
+  METHOD vip_con_descuento.
+    cl_abap_unit_assert=>assert_equals(
+      act = mo_cut->descuento( iv_monto = 2000 iv_cliente_vip = abap_true )
+      exp = '200.00' ).
+  ENDMETHOD.
+
+  METHOD no_vip_sin_descuento.
+    cl_abap_unit_assert=>assert_initial(
+      act = mo_cut->descuento( iv_monto = 2000 iv_cliente_vip = abap_false )
+      msg = 'Un cliente normal no tiene descuento' ).
+  ENDMETHOD.
+ENDCLASS.`),
+          "Pulsa <b>Prueba unitaria</b> (Ctrl+Shift+F10): las 3 pruebas deben salir en verde. Ahora <b>rompe el código a propósito</b>: cambia <code>'1.18'</code> por <code>'1.19'</code> y vuelve a ejecutar las pruebas. Verás en rojo qué prueba falló, el valor esperado y el obtenido. Corrígelo de nuevo hasta que todo esté en verde.",
+          syntax([
+            ["CLASS ltc_... DEFINITION FOR TESTING", "Clase de prueba: solo se ejecuta con ABAP Unit, nunca con F8. Convención de nombre: <code>ltc_</code> (local test class)."],
+            ["RISK LEVEL HARMLESS", "La prueba no modifica datos persistentes (otras opciones: DANGEROUS, CRITICAL)."],
+            ["DURATION SHORT", "Duración esperada (SHORT, MEDIUM, LONG)."],
+            ["METHODS nombre FOR TESTING.", "Cada método de prueba comprueba un caso concreto. El nombre debe decir qué se prueba."],
+            ["METHODS setup.", "Se ejecuta automáticamente <b>antes de cada</b> método de prueba: prepara el objeto a probar (también existen teardown, class_setup y class_teardown)."],
+            ["mo_cut", "\"Code Under Test\": el objeto que se prueba."],
+            ["cl_abap_unit_assert=>assert_equals( act = ... exp = ... )", "Compara el valor obtenido (act) con el esperado (exp). Si no son iguales, la prueba falla con el mensaje msg."],
+            ["assert_initial / assert_not_initial", "Comprueba que un valor esté vacío (0, espacio, tabla sin líneas) o que no lo esté."],
+            ["assert_true / assert_false / assert_subrc / fail", "Otras aserciones: condición verdadera o falsa, valor de sy-subrc, o fallo forzado."],
+          ]),
+          "Buenas prácticas: una prueba por comportamiento, nombres que expliquen el caso (<code>vip_con_descuento</code>), y separar la lógica en clases para poder probarla sin pantallas ni base de datos.",
+        ],
+        check: () => (store.data.quality?.unit?.ZP6_UNIT?.total || 0) >= 3 && store.data.quality.unit.ZP6_UNIT.failed === 0,
+        hint: "Ejecuta las pruebas de ZP6_UNIT (Ctrl+Shift+F10) y déjalas todas en verde.",
+      },
+      {
+        id: "p6s2",
+        title: "Escribe tus propias pruebas",
+        body: [
+          "Añade a <code>ZP6_UNIT</code> dos métodos de prueba nuevos en <code>ltc_precios</code>:",
+          "1. <code>vip_monto_bajo</code>: un cliente VIP con un monto de 500 <b>no</b> tiene descuento (el descuento solo aplica desde 1000).<br>2. <code>vip_limite_exacto</code>: un cliente VIP con exactamente 1000 tiene 100,00 de descuento.",
+          "Declara cada método con <code>FOR TESTING</code> en la DEFINITION y escribe su código en la IMPLEMENTATION. Ejecuta las pruebas: deben ser 5 en verde. Probar los <b>límites</b> (999, 1000, 1001) es donde más errores se encuentran.",
+          "Reto extra: cambia <code>&gt;= 1000</code> por <code>&gt; 1000</code> en el método descuento y comprueba que tu prueba <code>vip_limite_exacto</code> detecta el error.",
+        ],
+        check: () => (store.data.quality?.unit?.ZP6_UNIT?.total || 0) >= 5 && store.data.quality.unit.ZP6_UNIT.failed === 0,
+        hint: "Añade 2 métodos FOR TESTING más y ejecuta las pruebas: 5 en verde.",
+      },
+      {
+        id: "p6s3",
+        title: "Revisión de calidad con el ATC",
+        body: [
+          "El <b>ATC</b> (ABAP Test Cockpit) analiza el código sin ejecutarlo y avisa de problemas de rendimiento, robustez y estilo. En los proyectos reales, antes de pasar un programa a producción se exige que no tenga mensajes de prioridad 1 ni 2.",
+          "Crea <code>ZP6_ATC</code> con este código (tiene errores a propósito) y pulsa el botón <b>ATC</b> del editor:",
+          code(`REPORT zp6_atc.
+
+DATA: gt_conexiones TYPE STANDARD TABLE OF spfli,
+      gv_total      TYPE i,
+      gv_sobrante   TYPE string.
+
+SELECT * FROM spfli INTO TABLE gt_conexiones.
+
+LOOP AT gt_conexiones INTO DATA(gs_con).
+  SELECT SINGLE carrname FROM scarr INTO @DATA(gv_nombre)
+    WHERE carrid = @gs_con-carrid.
+  WRITE: / gs_con-carrid, gv_nombre, gs_con-cityfrom, gs_con-cityto.
+ENDLOOP.
+
+SELECT * FROM sflight
+  FOR ALL ENTRIES IN @gt_conexiones
+  WHERE carrid = @gt_conexiones-carrid
+  INTO TABLE @DATA(gt_vuelos).
+
+MOVE lines( gt_vuelos ) TO gv_total.
+WRITE: / 'Vuelos:', gv_total.`),
+          "Verás varios mensajes. Corrígelos uno a uno (haz clic en la línea para ir al código) y vuelve a pulsar ATC hasta que no quede ninguno de prioridad 1 ni 2. Pistas:",
+          syntax([
+            ["Acceso a base de datos dentro de un bucle", "Lee las aerolíneas antes del LOOP (SELECT carrid, carrname FROM scarr INTO TABLE ...) y dentro usa READ TABLE, o haz un JOIN entre spfli y scarr."],
+            ["FOR ALL ENTRIES sin comprobar la tabla", "Envuelve el SELECT en IF gt_conexiones IS NOT INITIAL. ... ENDIF."],
+            ["SELECT *", "Indica solo los campos que usas: SELECT carrid, connid, cityfrom, cityto FROM spfli ..."],
+            ["No se comprueba sy-subrc", "Después de READ TABLE o SELECT SINGLE, revisa IF sy-subrc = 0."],
+            ["Variable no utilizada", "Borra gv_sobrante (y gt_vuelos si solo la cuentas: puedes usar SELECT COUNT(*))."],
+            ["Instrucción obsoleta", "MOVE a TO b. se escribe hoy b = a."],
+          ]),
+          "Además, los mensajes de prioridad 3 (convenciones de nombres, código comentado, textos de mensaje fijos) no bloquean, pero un buen desarrollador también los corrige.",
+        ],
+        check: () => {
+          const q = store.data.quality?.atc?.ZP6_ATC;
+          return !!q && q.p1 === 0 && q.p2 === 0 && run("ZP6_ATC")?.status === "ok";
+        },
+        hint: "Corrige ZP6_ATC hasta que el ATC no muestre prioridad 1 ni 2, y ejecútalo.",
+      },
+    ],
+  },
 ];
 
 // ---- "Hazlo tú": ejercicios sin código para copiar al final de cada paso ----
