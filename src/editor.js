@@ -109,6 +109,11 @@ export function createEditor(el, value, readOnly) {
     wordBasedSuggestions: "off",
     rulers: [72],
     glyphMargin: true,
+    // margen izquierdo compacto (como el editor de SAP): números de línea estrechos
+    lineNumbersMinChars: 3,
+    lineDecorationsWidth: 4,
+    folding: true,
+    showFoldingControls: "mouseover",
   });
   // modo visualizar: fondo gris como en SAP (el editor no admite cambios)
   const syncRo = () => el.classList.toggle("ed-readonly", !!editor.getOption(monaco.editor.EditorOption.readOnly));
@@ -149,6 +154,9 @@ export function createCodeEditor(el, model, readOnly) {
     tabSize: 4,
     insertSpaces: true,
     wordBasedSuggestions: "currentDocument",
+    lineNumbersMinChars: 3,
+    lineDecorationsWidth: 4,
+    showFoldingControls: "mouseover",
   });
   window.__editor = editor;
   return editor;
