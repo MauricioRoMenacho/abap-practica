@@ -94,6 +94,27 @@ async function boot() {
   } else if (!inSystem()) await showLanding(app);
 }
 
+// aviso cuando hay una versión nueva publicada (evita trabajar con una versión vieja en caché)
+async function checkNewVersion() {
+  try {
+    const mine = [...document.scripts].map((x) => x.src).find((x) => /\/assets\/index-[\w-]+\.js/.test(x));
+    if (!mine) return;
+    const html = await (await fetch("/?v=" + Date.now(), { cache: "no-store" })).text();
+    const m = html.match(/\/assets\/index-[\w-]+\.js/);
+    if (m && !mine.endsWith(m[0]) && !document.querySelector(".new-version")) {
+      const bar = document.createElement("div");
+      bar.className = "new-version";
+      bar.innerHTML = "Hay una versión nueva del simulador. <button>Actualizar ahora</button>";
+      bar.querySelector("button").onclick = () => location.reload();
+      document.body.append(bar);
+    }
+  } catch {
+    /* sin conexión: ignorar */
+  }
+}
+setTimeout(checkNewVersion, 4000);
+setInterval(checkNewVersion, 5 * 60 * 1000);
+
 boot().catch((e) => {
   console.error(e);
   document.getElementById("app").innerHTML = `<div class="boot"><div class="boot-logo">ABAP</div><div class="boot-text">No se pudo iniciar: ${String(e.message || e)}</div></div>`;

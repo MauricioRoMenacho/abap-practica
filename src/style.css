@@ -2953,3 +2953,5 @@ body.on-landing { overflow: hidden; }
 .scratch-err { display: flex; gap: 6px; align-items: center; padding: 3px 8px; cursor: pointer; }
 .scratch-err:hover { background: #fdeaea; }
 .scratch-err .ico { width: 14px; height: 14px; }
+.new-version { position: fixed; left: 50%; transform: translateX(-50%); bottom: 40px; z-index: 500; background: #354a5f; color: #fff; padding: 10px 16px; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); font-size: 14px; display: flex; gap: 12px; align-items: center; }
+.new-version button { background: #fff; color: #0a4fa0; border: 0; border-radius: 4px; padding: 5px 12px; font-weight: 600; cursor: pointer; }
