@@ -444,7 +444,7 @@ FORM mostrar_datos.
     WRITE: / ls_aerolinea-carrid, ls_aerolinea-carrname, ls_aerolinea-currcode.
   ENDLOOP.
 ENDFORM.`),
-          "5) Vuelve al programa principal, <b>activa</b> (Ctrl+F3: se activan también los includes) y ejecuta con F8. Si verificas un include, el sistema lo revisa dentro de su programa principal, y los errores indican en qué include y línea están.",
+          "5) Vuelve al programa principal, <b>activa</b> (Ctrl+F3). Como en SAP, aparece la ventana <b>Objetos inactivos</b> con el programa y sus includes sin activar: deja marcados los que quieres activar y pulsa Continuar. Después ejecuta con F8. Si verificas un include, el sistema lo revisa dentro de su programa principal, y los errores indican en qué include y línea están.",
           syntax([
             ["INCLUDE nombre.", "Inserta en ese punto todo el código del include, como si estuviera escrito ahí. Si el include no existe, la verificación da error."],
             ["Programa tipo I", "Un include no lleva REPORT y no se puede ejecutar solo (F8 ejecuta su programa principal)."],

@@ -2925,3 +2925,7 @@ body.on-landing { overflow: hidden; }
 .titlebar { background: #f7f8f9; border-top: 0; }
 .content { background: #fff; }
 .panel { border-radius: 0 !important; box-shadow: none !important; border: 1px solid #d5dbe1 !important; }
+.worklist-bar { display: flex; gap: 6px; margin-bottom: 6px; }
+.worklist-table tr { cursor: pointer; }
+.worklist-table tr:hover td { background: #eef4fa; }
+.worklist-table td.center { text-align: center; width: 34px; }

@@ -330,29 +330,131 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     return errors.length === 0;
   };
 
+  // objetos inactivos relacionados (como la "lista de objetos inactivos" de SAP)
+  const inactiveObjects = () => {
+    const inactive = (x) => {
+      const q = store.program(x);
+      return q && (q.activeSource === null || q.activeSource !== q.source);
+    };
+    const incsOf = (main) => [...collectIncludes(store.program(main).source, (x) => (store.isInclude(x) ? store.program(x).source : null))];
+    const list = [n];
+    const mains = isInc() ? store.mainProgramsOf(n) : [n];
+    for (const m of mains) {
+      if (m !== n && inactive(m)) list.push(m);
+      for (const inc of incsOf(m)) if (inc !== n && inactive(inc) && !list.includes(inc)) list.push(inc);
+    }
+    return list;
+  };
+
+  const worklistDialog = async (list) => {
+    const checks = {};
+    const rows = list.map((o) => {
+      const q = store.program(o);
+      const cb = h("input", { type: "checkbox", checked: true });
+      checks[o] = cb;
+      return h(
+        "tr",
+        { onclick: (e) => { if (e.target !== cb) cb.checked = !cb.checked; } },
+        h("td", { class: "center" }, cb),
+        h("td", {}, q.type === "I" ? "Include" : "Programa"),
+        h("td", { class: "mono" }, h("b", {}, o)),
+        h("td", {}, q.title || ""),
+        h("td", { class: "mono" }, store.data.settings.user || "ALUMNO"),
+      );
+    });
+    const setAll = (v) => Object.values(checks).forEach((c) => (c.checked = v));
+    const body = h(
+      "div",
+      { class: "worklist" },
+      h("div", { class: "worklist-bar" }, h("button", { class: "btn small", onclick: () => setAll(true), title: "Seleccionar todo" }, "Seleccionar todo"), h("button", { class: "btn small", onclick: () => setAll(false), title: "Deseleccionar todo" }, "Deseleccionar")),
+      h(
+        "table",
+        { class: "grid-table worklist-table" },
+        h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Tipo de objeto"), h("th", {}, "Nombre"), h("th", {}, "Descripción"), h("th", {}, "Usuario"))),
+        h("tbody", {}, rows),
+      ),
+      h("p", { class: "hint" }, "Marque los objetos que se deben activar. Un programa se verifica junto con sus includes: si deja un include sin marcar, se usa su versión activa."),
+    );
+    const r = await dialog({
+      title: `Objetos inactivos de ${store.data.settings.user || "ALUMNO"}`,
+      width: "720px",
+      body,
+      buttons: [
+        { label: "Continuar", primary: true, value: () => list.filter((o) => checks[o].checked) },
+        { label: "Cancelar", value: null },
+      ],
+    });
+    return r;
+  };
+
   const activate = async (inner) => {
-    if (inner !== true) return app.busy(`Activando ${n}: verificando y generando...`, () => activate(true), 550);
     if (mode === "change") save(true);
-    const ok = await doCheck(true);
-    if (!ok) {
-      app.status(`No se pudo activar: ${isInc() ? "el include" : "el programa"} ${n} tiene errores de sintaxis`, "E");
+    let selected = [n];
+    if (inner !== true) {
+      const list = inactiveObjects();
+      if (list.length > 1) {
+        const r = await worklistDialog(list);
+        if (!r) {
+          app.status("Activación cancelada", "W");
+          return false;
+        }
+        if (!r.length) {
+          app.status("No se seleccionó ningún objeto", "W");
+          return false;
+        }
+        selected = r;
+      }
+      return app.busy(`Activando ${selected.length > 1 ? selected.length + " objetos" : n}: verificando y generando...`, () => activateObjects(selected), 550);
+    }
+    return activateObjects(selected);
+  };
+
+  // verifica y activa los objetos marcados
+  const activateObjects = async (selected) => {
+    const sel = new Set(selected);
+    const srcOf = (x) => (sel.has(x) ? store.program(x).source : store.program(x).activeSource);
+    const resolveInclude = (inc) => {
+      const ip = store.program(inc);
+      if (!ip) return null;
+      if (ip.type !== "I") return { error: "notinclude" };
+      const src = srcOf(inc);
+      if (src === null || src === undefined) return { error: "inactive" };
+      return { source: src };
+    };
+    // programas que hay que verificar: los marcados y, para cada include marcado, su programa principal
+    const toCheck = new Set(selected.filter((x) => store.program(x).type !== "I"));
+    let looseIncludes = [];
+    for (const x of selected.filter((y) => store.program(y).type === "I")) {
+      const mains = store.mainProgramsOf(x);
+      if (!mains.length) looseIncludes.push(x);
+      else if (!mains.some((m) => toCheck.has(m))) toCheck.add(mains[0]);
+    }
+    const errors = [];
+    for (const m of toCheck) {
+      const src = srcOf(m) ?? store.program(m).source;
+      const ctx = { ...ctxFor(m, "edit"), resolveInclude };
+      errors.push(...app.engine.check({ name: m, source: src }, ctx).errors);
+    }
+    for (const x of looseIncludes) {
+      const wrapper = `REPORT zz_check_${x.toLowerCase().substring(0, 15)}.\nINCLUDE ${x}.`;
+      const res = app.engine.check({ name: "ZZ_CHECK", source: wrapper }, { ...ctxFor(x, "edit"), resolveInclude });
+      errors.push(...res.errors.filter((e) => e.obj !== "ZZ_CHECK"));
+    }
+    await showErrors(errors);
+    if (errors.length) {
+      const objs = [...new Set(errors.map((e) => e.obj || n))];
+      app.status(`No se pudo activar: hay errores de sintaxis en ${objs.join(", ")}`, "E");
       return false;
     }
-    const p = prog();
-    p.activeSource = editor.getValue();
-    p.changed = new Date().toISOString();
-    // al activar un programa se activan también sus includes inactivos (lista de objetos inactivos)
-    let extra = 0;
-    for (const inc of collectIncludes(p.source, (x) => (store.isInclude(x) ? store.program(x).source : null))) {
-      const ip = store.program(inc);
-      if (ip.activeSource !== ip.source) {
-        ip.activeSource = ip.source;
-        extra++;
-      }
+    const now = new Date().toISOString();
+    for (const x of selected) {
+      const q = store.program(x);
+      q.activeSource = q.source;
+      q.changed = now;
     }
     store.save();
     updateHeader();
-    app.status(extra ? `Se activaron ${extra + 1} objetos: ${n} y ${extra} include(s)` : `Se ha activado el objeto ${n}`, "S");
+    app.status(selected.length > 1 ? `Se activaron ${selected.length} objetos: ${selected.join(", ")}` : `Se ha activado el objeto ${n}`, "S");
     return true;
   };
 
