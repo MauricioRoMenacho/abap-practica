@@ -2938,3 +2938,18 @@ body.on-landing { overflow: hidden; }
 .g-code.annot .cl-note .cl-term { font-family: var(--mono); font-weight: 700; color: #7a4b00; }
 .g-code.annot .cl-note code { background: #f3ead0; color: #4a3500; }
 .g-code.annot { max-height: none; overflow-x: auto; }
+
+/* borrador de práctica al lado del editor */
+.ed-split { flex: 1; display: flex; min-height: 0; }
+.ed-split > .editor-host { flex: 1; min-width: 0; }
+.scratch-pane { display: none; }
+.scratch-pane.open { display: flex; flex-direction: column; width: 46%; min-width: 320px; border-left: 3px solid #f0b43c; background: #fffdf5; }
+.scratch-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: linear-gradient(#fff8e1, #fbefc8); border-bottom: 1px solid #e5d29a; font-size: 13px; }
+.scratch-head .muted { margin-left: 4px; }
+.scratch-spacer { flex: 1; }
+.scratch-host { flex: 1; min-height: 120px; }
+.scratch-errors:empty { display: none; }
+.scratch-errors { max-height: 120px; overflow: auto; border-top: 2px solid var(--err); background: #fff; font-size: 12.5px; }
+.scratch-err { display: flex; gap: 6px; align-items: center; padding: 3px 8px; cursor: pointer; }
+.scratch-err:hover { background: #fdeaea; }
+.scratch-err .ico { width: 14px; height: 14px; }

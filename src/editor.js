@@ -26,6 +26,11 @@ monaco.languages.setLanguageConfiguration("abap", {
     { open: "`", close: "`", notIn: ["string", "comment"] },
     { open: "|", close: "|", notIn: ["string", "comment"] },
   ],
+  // sangría automática como el editor de SAP: 2 espacios dentro de cada bloque
+  indentationRules: {
+    increaseIndentPattern: /^\s*(IF|ELSEIF|ELSE|LOOP|DO|WHILE|CASE|WHEN|FORM|METHOD|TRY|CATCH|CLEANUP|FUNCTION|MODULE|START-OF-SELECTION|END-OF-SELECTION|INITIALIZATION|TOP-OF-PAGE|AT\s+SELECTION-SCREEN|AT\s+LINE-SELECTION|AT\s+(FIRST|LAST|NEW|END\s+OF)|PUBLIC\s+SECTION|PROTECTED\s+SECTION|PRIVATE\s+SECTION|CLASS\s+\S+\s+(DEFINITION|IMPLEMENTATION))\b[^"]*\.\s*("[^\n]*)?$/i,
+    decreaseIndentPattern: /^\s*(ENDIF|ELSEIF|ELSE|ENDLOOP|ENDDO|ENDWHILE|ENDCASE|WHEN|ENDFORM|ENDMETHOD|ENDCLASS|ENDTRY|CATCH|CLEANUP|ENDFUNCTION|ENDMODULE|ENDAT|ENDSELECT|PROTECTED\s+SECTION|PRIVATE\s+SECTION)\b/i,
+  },
 });
 monaco.languages.setMonarchTokensProvider("abap", {
   ignoreCase: true,
@@ -106,6 +111,10 @@ export function createEditor(el, value, readOnly) {
     scrollBeyondLastLine: false,
     renderWhitespace: "none",
     tabSize: 2,
+    insertSpaces: true,
+    detectIndentation: false,
+    autoIndent: "full",
+    useTabStops: true,
     wordBasedSuggestions: "off",
     rulers: [72],
     glyphMargin: true,

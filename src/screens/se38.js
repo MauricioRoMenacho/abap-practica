@@ -597,6 +597,95 @@ export function editorScreen(app, n, initialMode, opts = {}) {
     app.status(mode === "change" ? "Modo modificar" : "Modo visualizar", "S");
   };
 
+  // ---- borrador de práctica: otro editor al lado, con su propio código ----
+  let scratchPane = null;
+  let scratch = null;
+  const SCRATCH_DEFAULT = `REPORT zz_borrador.
+
+" Borrador de práctica: prueba aquí sin tocar tu programa.
+" Verificar comprueba la sintaxis; Activar y ejecutar lo ejecuta.
+
+WRITE / 'Hola desde el borrador'.
+`;
+  const scratchSrc = () => (store.data.scratch ||= {})[n] ?? SCRATCH_DEFAULT;
+  const saveScratch = () => {
+    if (!scratch) return;
+    (store.data.scratch ||= {})[n] = scratch.getValue();
+    store.save();
+  };
+  const scratchProgram = () => {
+    let src = scratch.getValue();
+    let offset = 0;
+    if (!/^\s*(REPORT|PROGRAM)\b/im.test(src)) {
+      src = "REPORT zz_borrador.\n" + src;
+      offset = 1;
+    }
+    return { src, offset };
+  };
+  const scratchErrorsEl = h("div", { class: "scratch-errors" });
+  const scratchCheck = async () => {
+    if (!scratch) return false;
+    saveScratch();
+    const { src, offset } = scratchProgram();
+    const res = app.engine.check({ name: "ZZ_BORRADOR", source: src }, ctxFor(n, "edit"));
+    const errs = res.errors.filter((e) => !e.obj || e.obj === "ZZ_BORRADOR").map((e) => ({ ...e, row: Math.max(1, e.row - offset), endRow: Math.max(1, (e.endRow || e.row) - offset) }));
+    const { setMarkers } = await import("../editor.js");
+    setMarkers(scratch, errs);
+    scratchErrorsEl.replaceChildren(
+      ...errs.slice(0, 6).map((e) =>
+        h("div", { class: "scratch-err", onclick: () => { scratch.revealLineInCenter(e.row); scratch.setPosition({ lineNumber: e.row, column: e.col || 1 }); scratch.focus(); } }, h("span", { class: "ico ico-error" }), `Línea ${e.row}: ${e.message}`),
+      ),
+    );
+    app.status(errs.length ? `Borrador: ${errs.length} error(es) de sintaxis` : "Borrador: no hay errores de sintaxis", errs.length ? "E" : "S");
+    return errs.length === 0;
+  };
+  const scratchRun = async () => {
+    if (!(await app.busy("Borrador: verificando y activando...", () => scratchCheck(), 300))) return;
+    const { src } = scratchProgram();
+    runProgram(app, "ZZ_BORRADOR", { virtual: { name: "ZZ_BORRADOR", title: "Borrador de práctica", activeSource: src } });
+  };
+  const openScratch = () => {
+    if (!scratchPane || scratch) return;
+    const host2 = h("div", { class: "editor-host scratch-host" });
+    scratchPane.classList.add("open");
+    scratchPane.replaceChildren(
+      h(
+        "div",
+        { class: "scratch-head" },
+        h("b", {}, "Borrador de práctica"),
+        h("span", { class: "muted small" }, "no modifica " + n),
+        h("div", { class: "scratch-spacer" }),
+        h("button", { class: "btn small", title: "Verificar el borrador", onclick: () => app.busy("Borrador: verificando...", () => scratchCheck(), 250) }, h("span", { class: "ico ico-check" }), "Verificar"),
+        h("button", { class: "btn small btn-primary", title: "Activar y ejecutar el borrador", onclick: scratchRun }, h("span", { class: "ico ico-activate" }), "Activar y ejecutar"),
+        h("button", { class: "btn small", title: "Cerrar el borrador (se conserva su contenido)", onclick: () => toggleScratch(false) }, h("span", { class: "ico ico-close" })),
+      ),
+      host2,
+      scratchErrorsEl,
+    );
+    import("../editor.js").then(({ createEditor }) => {
+      scratch = createEditor(host2, scratchSrc(), false);
+      window.__editor = editor || window.__editor;
+      let t = null;
+      scratch.onDidChangeModelContent(() => {
+        clearTimeout(t);
+        t = setTimeout(saveScratch, 600);
+      });
+    });
+  };
+  const toggleScratch = (force) => {
+    const want = force ?? !scratch;
+    store.data.scratchOpen = want;
+    store.save();
+    if (want) openScratch();
+    else {
+      saveScratch();
+      scratch?.dispose();
+      scratch = null;
+      scratchPane?.classList.remove("open");
+      scratchPane?.replaceChildren();
+    }
+  };
+
   return {
     id: "SE38-ED",
     tcode: "SE38",
@@ -613,6 +702,7 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       { icon: "pretty", label: "Pretty Printer", key: "Shift+F1", action: pretty, disabled: mode !== "change" },
       { icon: "search", label: "ATC", tip: "ABAP Test Cockpit: revisión de calidad del código", action: runAtc },
       { icon: "unit", label: "Prueba unitaria", tip: "Ejecutar las pruebas ABAP Unit (Ctrl+Shift+F10)", key: "Ctrl+Shift+F10", action: runUnit },
+      { icon: "editor", label: "Borrador", text: true, tip: "Abrir o cerrar un borrador de práctica al lado del código (no modifica el programa)", action: () => toggleScratch() },
       { icon: "text", label: "Elementos de texto", action: () => { const target = isInc() ? store.mainProgramsOf(n)[0] : n; if (!target) return app.status("Los elementos de texto pertenecen al programa principal: incluya primero este include en un programa", "W"); app.push(textElementsScreen(app, target, mode)); } },
     ],
     keys: { "Ctrl+S": () => saveBusy() },
@@ -620,7 +710,14 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       headerEl = h("div", { class: "editor-head" });
       const host = h("div", { class: "editor-host" });
       errorsEl = h("div", { class: "err-panel" });
-      el.append(headerEl, host, errorsEl);
+      scratchPane = h("div", { class: "scratch-pane" });
+      el.append(headerEl, h("div", { class: "ed-split" }, host, scratchPane), errorsEl);
+      if (scratch) {
+        saveScratch();
+        scratch.dispose();
+        scratch = null;
+      }
+      if (store.data.scratchOpen) openScratch();
       import("../editor.js").then(({ createEditor }) => {
         editor = createEditor(host, prog().source, mode !== "change");
         editor.onDidChangeModelContent(() => updateHeader());
@@ -717,6 +814,9 @@ export function editorScreen(app, n, initialMode, opts = {}) {
       return !!r;
     },
     destroy() {
+      saveScratch();
+      scratch?.dispose();
+      scratch = null;
       editor?.dispose();
       editor = null;
     },
