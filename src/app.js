@@ -23,6 +23,9 @@ const KEY_LABELS = {
 // en SAP GUI estas funciones son solo un icono (el texto aparece al pasar el ratón)
 const ICON_ONLY = new Set(["change", "display", "check", "activate", "exec", "save", "delete", "refresh", "print", "download"]);
 
+// botón "Visualizar <-> Modificar": en SAP es siempre el mismo icono; en modo modificar queda pulsado
+const isToggle = (it) => /Visualizar ↔ Modificar/.test(it.tip || "");
+
 function keyName(e) {
   let k = e.key;
   if (k.length === 1) k = k.toUpperCase();
@@ -86,46 +89,59 @@ export class App {
         { class: "shell" },
         h(
           "div",
-          { class: "menubar" },
-          h("div", { class: "brand", title: "Práctica ABAP" }, h("span", { class: "brand-logo" }, "ABAP"), h("span", { class: "brand-sub" }, "Práctica")),
-          menu("Pasar a", [
-            ["SE38 - Editor ABAP", () => this.command("/nSE38")],
-            ["SE11 - Diccionario ABAP", () => this.command("/nSE11")],
-            ["SE16 - Browser de datos", () => this.command("/nSE16")],
-            ["SE84 - Sistema info repositorio", () => this.command("/nSE84")],
-            ["ZUI5 - SAPUI5 / Fiori (Business Application Studio)", () => this.command("/nZUI5")],
-            ["SE24 - Clases globales", () => this.command("/nSE24")],
-            ["SE37 - Módulos de función", () => this.command("/nSE37")],
-            ["SE91 - Clases de mensajes", () => this.command("/nSE91")],
-            ["ST05 - Traza SQL", () => this.command("/nST05")],
-            ["SM12 - Entradas de bloqueo", () => this.command("/nSM12")],
-            ["ZJUEGOS - Retos y juegos", () => this.command("/nZJUEGOS")],
-            "-",
-            ["Menú SAP Easy Access", () => this.home()],
-          ]),
-          menu("Sistema", [
-            ["Cerrar sesión (volver a la página de inicio)", async () => { const cur = this.current(); if (cur?.canLeave && !(await cur.canLeave())) return; this.logoff?.(); }],
-            "-",
-            ["Usuario e idioma...", () => this.userSettings()],
-            "-",
-            ["Exportar mis datos (respaldo)", () => this.exportData()],
-            ["Importar datos...", () => this.importData()],
-            ["Restaurar datos de las tablas estándar", () => this.resetFlights()],
-            ["Borrar todo y empezar de cero", () => this.resetAll()],
-          ]),
-          menu("Ayuda", [
-            ["Glosario, errores comunes y diferencias (ZAYUDA)", () => this.command("/nZAYUDA")],
-            ["Examen teórico y constancia", () => this.command("/nZAYUDA")],
-            ["Atajos de teclado", () => this.shortcuts()],
-            ["Qué soporta el simulador", () => this.limits()],
-            ["Acerca de", () => this.about()],
-          ]),
-          h("div", { class: "menubar-spacer" }),
-          h("button", { class: "guide-toggle", onclick: () => this.toggleGuide() }, h("span", { class: "ico ico-guide" }), "Guía de práctica"),
-        ),
-        h(
-          "div",
-          { class: "stdtoolbar" },
+          { class: "sap-header" },
+          // en SAP GUI (tema Belize/Quartz) la barra de menús está dentro del botón "Menú"
+          h(
+            "div",
+            { class: "menu sapmenu" },
+            h("button", { class: "menu-btn sapmenu-btn", title: "Menú (F10)" }, "Menú", h("span", { class: "sapmenu-caret" })),
+            h(
+              "div",
+              { class: "menu-pop" },
+              ...[
+                ["Pasar a", [
+                  ["SE38 - Editor ABAP", () => this.command("/nSE38")],
+                  ["SE11 - Diccionario ABAP", () => this.command("/nSE11")],
+                  ["SE16 - Browser de datos", () => this.command("/nSE16")],
+                  ["SE84 - Sistema info repositorio", () => this.command("/nSE84")],
+                  ["SE24 - Clases globales", () => this.command("/nSE24")],
+                  ["SE37 - Módulos de función", () => this.command("/nSE37")],
+                  ["SE91 - Clases de mensajes", () => this.command("/nSE91")],
+                  ["ST05 - Traza SQL", () => this.command("/nST05")],
+                  ["SM12 - Entradas de bloqueo", () => this.command("/nSM12")],
+                  ["ZUI5 - SAPUI5 / Fiori (Business Application Studio)", () => this.command("/nZUI5")],
+                  ["ZJUEGOS - Retos y juegos", () => this.command("/nZJUEGOS")],
+                  "-",
+                  ["SAP Easy Access", () => this.home()],
+                ]],
+                ["Sistema", [
+                  ["Crear modo (nueva sesión)", () => this.newSession()],
+                  ["Finalizar sesión (volver a la página de inicio)", async () => { const cur = this.current(); if (cur?.canLeave && !(await cur.canLeave())) return; this.logoff?.(); }],
+                  "-",
+                  ["Datos de usuario e idioma...", () => this.userSettings()],
+                  "-",
+                  ["Exportar mis datos (respaldo)", () => this.exportData()],
+                  ["Importar datos...", () => this.importData()],
+                  ["Restaurar datos de las tablas estándar", () => this.resetFlights()],
+                  ["Borrar todo y empezar de cero", () => this.resetAll()],
+                ]],
+                ["Ayuda", [
+                  ["Glosario, errores comunes y diferencias (ZAYUDA)", () => this.command("/nZAYUDA")],
+                  ["Examen teórico y constancia", () => this.command("/nZAYUDA")],
+                  ["Atajos de teclado", () => this.shortcuts()],
+                  ["Qué soporta el simulador", () => this.limits()],
+                  ["Acerca de", () => this.about()],
+                ]],
+              ].map(([label, items]) =>
+                h(
+                  "div",
+                  { class: "submenu" },
+                  h("button", { class: "menu-item has-sub" }, label),
+                  h("div", { class: "menu-pop sub" }, items.map((it) => (it === "-" ? h("div", { class: "menu-sep" }) : h("button", { class: "menu-item", onclick: () => { document.activeElement?.blur?.(); it[1](); } }, it[0])))),
+                ),
+              ),
+            ),
+          ),
           h("button", { class: "std-btn enter-btn", title: "Intro (Enter)", onclick: () => this.cmd.value.trim() ? this.cmd.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" })) : this.current()?.onEnter?.() }, h("span", { class: "ico ico-enter" })),
           h("div", { class: "cmd-wrap" }, this.cmd),
           h("div", { class: "std-sep" }),
@@ -135,7 +151,22 @@ export class App {
           stdBtn("exit", "Finalizar (Shift+F3)", () => this.exitTransaction(), "exit"),
           stdBtn("cancel", "Cancelar (F12)", () => this.back(), "cancel"),
           h("div", { class: "std-sep" }),
-          stdBtn("help", "Ayuda", () => this.shortcuts()),
+          stdBtn("print", "Imprimir (Ctrl+P)", () => window.print()),
+          stdBtn("find", "Buscar (Ctrl+F)", () => this.find()),
+          stdBtn("findnext", "Continuar búsqueda (Ctrl+G)", () => this.find(true)),
+          h("div", { class: "std-sep" }),
+          stdBtn("pgfirst", "Primera página (Ctrl+Re Pág)", () => this.page("first")),
+          stdBtn("pgprev", "Página anterior (Re Pág)", () => this.page("prev")),
+          stdBtn("pgnext", "Página siguiente (Av Pág)", () => this.page("next")),
+          stdBtn("pglast", "Última página (Ctrl+Av Pág)", () => this.page("last")),
+          h("div", { class: "std-sep" }),
+          stdBtn("session", "Crear modo nuevo", () => this.newSession()),
+          stdBtn("shortcut", "Crear acceso directo", () => this.status("Los accesos directos de escritorio no están disponibles en el simulador", "I")),
+          h("div", { class: "std-sep" }),
+          stdBtn("help", "Ayuda (F1)", () => this.shortcuts()),
+          h("div", { class: "menubar-spacer" }),
+          h("button", { class: "guide-toggle", title: "Mostrar u ocultar la guía de práctica", onclick: () => this.toggleGuide() }, h("span", { class: "ico ico-guide" }), "Guía de práctica"),
+          stdBtn("layout", "Adaptar disposición local (Alt+F12)", () => this.shortcuts()),
         ),
         this.titleEl,
         this.appToolbar,
@@ -246,17 +277,41 @@ export class App {
           : h(
               "button",
               {
-                class: "app-btn" + (it.primary ? " primary" : "") + (it.icon && ICON_ONLY.has(it.icon) && !it.text ? " icon-only" : it.icon ? "" : " text-btn"),
+                class: "app-btn" + (it.primary ? " primary" : "") + (isToggle(it) && it.icon === "display" ? " pressed" : "") + (it.icon && ICON_ONLY.has(it.icon) && !it.text ? " icon-only" : it.icon ? "" : " text-btn"),
                 title: (it.tip || it.label || "") + (it.key ? ` (${KEY_LABELS[it.key] || it.key})` : ""),
                 disabled: it.disabled,
                 onclick: () => it.action(),
               },
-              it.icon ? h("span", { class: "ico ico-" + it.icon }) : null,
+              it.icon ? h("span", { class: "ico ico-" + (isToggle(it) ? "change" : it.icon) }) : null,
               it.label && !(it.icon && ICON_ONLY.has(it.icon) && !it.text) ? h("span", {}, it.label) : null,
             ),
       ),
     );
     this.updateStatusInfo();
+  }
+
+  // sistema: buscar, paginar y nuevo modo
+  find(next) {
+    const ed = window.__editor;
+    if (ed && document.querySelector(".editor-host")?.contains(ed.getDomNode())) {
+      ed.focus();
+      ed.getAction(next ? "editor.action.nextMatchFindAction" : "actions.find")?.run();
+      return;
+    }
+    const q = next && this._lastFind ? this._lastFind : window.prompt("Buscar:", this._lastFind || "");
+    if (!q) return;
+    this._lastFind = q;
+    if (!window.find || !window.find(q, false, false, true)) this.status(`No se encontró "${q}"`, "W");
+  }
+  page(where) {
+    const sc = [...this.content.querySelectorAll("*")].find((e) => e.scrollHeight > e.clientHeight + 10 && /auto|scroll/.test(getComputedStyle(e).overflowY)) || this.content;
+    const h0 = sc.clientHeight * 0.9;
+    sc.scrollTop = where === "first" ? 0 : where === "last" ? sc.scrollHeight : sc.scrollTop + (where === "next" ? h0 : -h0);
+  }
+  newSession() {
+    sessionStorage.setItem("abapp.inSystem", "1");
+    const w = window.open(location.pathname, "_blank");
+    if (!w) this.status("El navegador bloqueó la ventana nueva", "W");
   }
 
   async back() {

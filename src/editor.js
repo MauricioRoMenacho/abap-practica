@@ -110,6 +110,10 @@ export function createEditor(el, value, readOnly) {
     rulers: [72],
     glyphMargin: true,
   });
+  // modo visualizar: fondo gris como en SAP (el editor no admite cambios)
+  const syncRo = () => el.classList.toggle("ed-readonly", !!editor.getOption(monaco.editor.EditorOption.readOnly));
+  editor.onDidChangeConfiguration(syncRo);
+  syncRo();
   window.__editor = editor;
   return editor;
 }
