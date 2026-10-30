@@ -2929,3 +2929,12 @@ body.on-landing { overflow: hidden; }
 .worklist-table tr { cursor: pointer; }
 .worklist-table tr:hover td { background: #eef4fa; }
 .worklist-table td.center { text-align: center; width: 34px; }
+
+/* explicación de la sintaxis dentro del código */
+.g-code.annot { white-space: normal; padding: 10px 0; }
+.g-code.annot .cl { white-space: pre; padding: 0 12px; min-height: 1.45em; }
+.g-code.annot .cl.has-note { background: rgba(255, 255, 255, 0.06); }
+.g-code.annot .cl-note { white-space: normal; margin: 2px 12px 6px 22px; padding: 5px 9px; border-left: 3px solid #f0b43c; background: #fff8e1; color: #3a3a3a; font-family: var(--font); font-size: 12.5px; line-height: 1.45; border-radius: 0 4px 4px 0; }
+.g-code.annot .cl-note .cl-term { font-family: var(--mono); font-weight: 700; color: #7a4b00; }
+.g-code.annot .cl-note code { background: #f3ead0; color: #4a3500; }
+.g-code.annot { max-height: none; overflow-x: auto; }

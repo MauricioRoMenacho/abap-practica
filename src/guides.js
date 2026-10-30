@@ -2343,6 +2343,59 @@ export async function openGame(app, id) {
   if (g) app.push(gameScreen(app, g));
 }
 
+// ---- explicación de la sintaxis dentro del propio código ----
+// Un bloque de explicación que sigue a un bloque de código se reparte línea por línea.
+const explainsCode = (b) => !!b && !!b.syntax && (!b.title || b.title === "Explicación");
+const mergedSyntax = (body, i) => explainsCode(body[i]) && !!body[i - 1]?.code;
+
+function decodeHtml(t) {
+  return String(t).replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ");
+}
+
+// claves para buscar un término en el código, de la más específica a la más general
+function termKeys(t) {
+  const clean = decodeHtml(t).trim().replace(/\.$/, "");
+  const keys = [clean];
+  const cut = clean.split(/\s*\.\.\.\s*|\s+\/\s+|\s+o\s+/)[0];
+  if (cut && cut !== clean) keys.push(cut);
+  const toks = cut.split(/\s+/).filter(Boolean);
+  for (let n = Math.min(3, toks.length - 1); n >= 1; n--) keys.push(toks.slice(0, n).join(" "));
+  // DATA(var), lines( itab )...: buscar hasta el paréntesis
+  if (toks[0] && toks[0].includes("(")) keys.push(toks[0].split("(")[0] + "(");
+  return [...new Set(keys.map((k) => k.trim()).filter((k) => k.length >= 1))];
+}
+
+function annotatedCode(b, rows) {
+  const lines = b.code.split("\n");
+  const notes = lines.map(() => []);
+  const rest = [];
+  if (rows) {
+    const low = lines.map((l) => l.toLowerCase());
+    for (const [t, d] of rows) {
+      let at = -1;
+      for (const k of termKeys(t)) {
+        const kl = k.toLowerCase();
+        // palabras sueltas: coincidencia de palabra completa
+        const re = /^[\w-]+$/.test(k) ? new RegExp("(^|[^\\w-])" + kl.replace(/[-]/g, "\\-") + "($|[^\\w-])") : null;
+        at = low.findIndex((l) => (re ? re.test(l) : l.includes(kl)));
+        if (at >= 0) break;
+      }
+      if (at >= 0) notes[at].push([t, d]);
+      else rest.push([t, d]);
+    }
+  }
+  const pre = h(
+    "div",
+    { class: "g-code annot" },
+    lines.map((l, i) => [
+      h("div", { class: "cl" + (notes[i].length ? " has-note" : "") }, l || " "),
+      ...notes[i].map(([t, d]) => h("div", { class: "cl-note" }, h("span", { class: "cl-term" }, decodeHtml(t)), h("span", { html: " " + d }))),
+    ]),
+  );
+  if (!rest.length) return pre;
+  return h("div", {}, pre, h("details", { class: "g-syntax", open: true }, h("summary", {}, "Más explicaciones"), h("dl", {}, rest.map(([t, d]) => [h("dt", {}, h("code", {}, t)), h("dd", { html: d })]))));
+}
+
 export function guidePanel(app, host) {
   let current = localStorage.getItem("abapp.guideTab") || "p0";
   if (!GUIDES.some((x) => x.id === current)) current = "p0";
@@ -2511,8 +2564,10 @@ export function guidePanel(app, host) {
                 ? h(
                     "div",
                     { class: "step-body" },
-                    s.body.map((b) =>
-                      typeof b === "string"
+                    s.body.map((b, bi) =>
+                      mergedSyntax(s.body, bi)
+                        ? null
+                        : typeof b === "string"
                         ? h("div", { class: "g-p", html: b })
                         : b.practice
                           ? practiceCard(b.practice)
@@ -2531,7 +2586,7 @@ export function guidePanel(app, host) {
                             "div",
                             { class: "g-codewrap" },
                             b.file ? h("div", { class: "g-codefile" }, b.file) : null,
-                            h("pre", { class: "g-code" }, b.code),
+                            annotatedCode(b, explainsCode(s.body[bi + 1]) ? s.body[bi + 1].syntax : null),
                             h(
                               "button",
                               {
