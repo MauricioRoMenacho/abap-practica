@@ -711,7 +711,34 @@ WRITE / 'Hola desde el borrador'.
       const host = h("div", { class: "editor-host" });
       errorsEl = h("div", { class: "err-panel" });
       scratchPane = h("div", { class: "scratch-pane" });
-      el.append(headerEl, h("div", { class: "ed-split" }, host, scratchPane), errorsEl);
+      // separador arrastrable entre el programa y el borrador
+      const splitter = h("div", { class: "ed-splitter", title: "Arrastre para cambiar el ancho del borrador (doble clic: mitad)" });
+      const split = h("div", { class: "ed-split" }, host, splitter, scratchPane);
+      const savedW = Number(localStorage.getItem("abapp.scratchW"));
+      if (savedW) scratchPane.style.width = savedW + "%";
+      splitter.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        splitter.setPointerCapture(e.pointerId);
+        split.classList.add("resizing");
+        const r = split.getBoundingClientRect();
+        const move = (ev) => {
+          const pct = Math.min(80, Math.max(20, ((r.right - ev.clientX) / r.width) * 100));
+          scratchPane.style.width = pct.toFixed(1) + "%";
+        };
+        const up = () => {
+          split.classList.remove("resizing");
+          splitter.removeEventListener("pointermove", move);
+          splitter.removeEventListener("pointerup", up);
+          localStorage.setItem("abapp.scratchW", String(parseFloat(scratchPane.style.width) || 46));
+        };
+        splitter.addEventListener("pointermove", move);
+        splitter.addEventListener("pointerup", up);
+      });
+      splitter.addEventListener("dblclick", () => {
+        scratchPane.style.width = "50%";
+        localStorage.setItem("abapp.scratchW", "50");
+      });
+      el.append(headerEl, split, errorsEl);
       if (scratch) {
         saveScratch();
         scratch.dispose();
